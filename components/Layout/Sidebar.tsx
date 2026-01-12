@@ -34,6 +34,8 @@ export const Sidebar: React.FC = () => {
       : 'text-gray-400 hover:text-white hover:bg-white/5'}
   `;
 
+  const tagLink = (tag: string) => `/dashboard?tag=${encodeURIComponent(tag)}`;
+
   return (
     <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen fixed left-0 top-0">
       <div className="p-6">
@@ -58,42 +60,42 @@ export const Sidebar: React.FC = () => {
         <div className="mb-6">
             <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Smart Filters</p>
             
-            <NavLink to="/dashboard?tag=deepfake" className={() => navItemClass(isActive('/dashboard', 'deepfake'))}>
+            <NavLink to={tagLink('deepfake')} className={() => navItemClass(isActive('/dashboard', 'deepfake'))}>
                 <Video size={18} className="mr-3" />
                 Deepfakes
             </NavLink>
 
-            <NavLink to="/dashboard?tag=voz-clonada" className={() => navItemClass(isActive('/dashboard', 'voz-clonada'))}>
+            <NavLink to={tagLink('voz-clonada')} className={() => navItemClass(isActive('/dashboard', 'voz-clonada'))}>
                 <Mic size={18} className="mr-3" />
                 Vozes Clonadas
             </NavLink>
 
-            <NavLink to="/dashboard?tag=tiktok" className={() => navItemClass(isActive('/dashboard', 'tiktok'))}>
+            <NavLink to={tagLink('tiktok')} className={() => navItemClass(isActive('/dashboard', 'tiktok'))}>
                 <Activity size={18} className="mr-3" />
                 TikTok Trends
             </NavLink>
 
-            <NavLink to="/dashboard?tag=musica" className={() => navItemClass(isActive('/dashboard', 'musica'))}>
+            <NavLink to={tagLink('musica')} className={() => navItemClass(isActive('/dashboard', 'musica'))}>
                 <Music size={18} className="mr-3" />
                 Músicas
             </NavLink>
 
-            <NavLink to="/dashboard?tag=sfx" className={() => navItemClass(isActive('/dashboard', 'sfx'))}>
+            <NavLink to={tagLink('sfx')} className={() => navItemClass(isActive('/dashboard', 'sfx'))}>
                 <Sparkles size={18} className="mr-3" />
                 SFX
             </NavLink>
 
-             <NavLink to="/dashboard?tag=veo3" className={() => navItemClass(isActive('/dashboard', 'veo3'))}>
+             <NavLink to={tagLink('veo3')} className={() => navItemClass(isActive('/dashboard', 'veo3'))}>
                 <Clapperboard size={18} className="mr-3" />
                 VEO 3
             </NavLink>
 
-             <NavLink to="/dashboard?tag=prova-social" className={() => navItemClass(isActive('/dashboard', 'prova-social'))}>
+             <NavLink to={tagLink('prova-social')} className={() => navItemClass(isActive('/dashboard', 'prova-social'))}>
                 <Users size={18} className="mr-3" />
                 Provas Sociais
             </NavLink>
 
-             <NavLink to="/dashboard?tag=ugc" className={() => navItemClass(isActive('/dashboard', 'ugc'))}>
+             <NavLink to={tagLink('ugc')} className={() => navItemClass(isActive('/dashboard', 'ugc'))}>
                 <Users size={18} className="mr-3" />
                 Depoimentos UGC
             </NavLink>
