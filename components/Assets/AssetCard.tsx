@@ -2,6 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetRow } from '../../hooks/useAssets';
 import { Play } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 
 type Props = {
   asset: AssetRow;
@@ -9,6 +11,25 @@ type Props = {
 
 export const AssetCard: React.FC<Props> = ({ asset }) => {
   const navigate = useNavigate();
+  const { organizationId } = useAuth();
+  const [src, setSrc] = React.useState<string>('');
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!organizationId) return;
+        const bucket = getOrgBucketName(organizationId);
+        const signed = await createSignedUrl(bucket, asset.url, 3600);
+        if (mounted) setSrc(signed);
+      } catch {
+        if (mounted) setSrc('');
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [organizationId, asset.url]);
 
   return (
     <button
@@ -17,9 +38,9 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
     >
       <div className="relative aspect-video bg-black/60 overflow-hidden">
         {/* preview */}
-        {asset.url ? (
+        {src ? (
           <video
-            src={asset.url}
+            src={src}
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
             muted
             playsInline

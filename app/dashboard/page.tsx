@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
 import { AssetCard } from '../../components/Assets/AssetCard';
+import { UploadDropzone } from '../../components/Assets/UploadDropzone';
 import { FolderCard } from '../../components/Folders/FolderCard';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -14,7 +15,7 @@ export const DashboardPage: React.FC = () => {
   const { organizationId } = useAuth();
   
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading } = useAssets({ tag });
+  const { assets, loading: assetsLoading, refresh } = useAssets({ tag });
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
@@ -126,6 +127,8 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
+                 <UploadDropzone folderId={null} onUploaded={() => refresh()} />
+
                  {/* Show Folders if strictly filtering or on home (logic per requirements) */}
                  {folders.length > 0 && !tag && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
