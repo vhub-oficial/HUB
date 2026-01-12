@@ -3,7 +3,6 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
 import { AssetCard } from '../../components/Assets/AssetCard';
-import { UploadDropzone } from '../../components/Assets/UploadDropzone';
 import { FolderCard } from '../../components/Folders/FolderCard';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -136,13 +135,6 @@ export const DashboardPage: React.FC = () => {
                    >
                      V•HUB · Novo Asset
                    </button>
-                   {type && (
-                     <UploadDropzone
-                       folderId={null}
-                       categoryType={type}
-                       onUploaded={() => refresh()}
-                     />
-                   )}
                  </div>
 
                  {/* Show Folders if strictly filtering or on home (logic per requirements) */}

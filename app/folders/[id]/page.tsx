@@ -1,23 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useFolders } from '../../../hooks/useFolders';
 import { useAssets } from '../../../hooks/useAssets';
 import { FolderCard } from '../../../components/Folders/FolderCard';
 import { Breadcrumb } from '../../../components/Folders/Breadcrumb';
 import { AssetGrid } from '../../../components/Assets/AssetGrid';
-import { UploadDropzone } from '../../../components/Assets/UploadDropzone';
+import { NewAssetModal } from '../../../components/Assets/NewAssetModal';
 
 export const FolderPage: React.FC = () => {
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
   const folderId = id === 'root' ? null : (id ?? null);
-  const categoryType = searchParams.get('type') ?? 'original';
 
   const { folders, loading: foldersLoading, error: foldersError, getBreadcrumb } = useFolders(folderId);
   const { assets, loading: assetsLoading, error: assetsError, refresh } = useAssets({
     folderId: folderId, // null => root assets
     limit: 60,
   });
+  const [openNew, setOpenNew] = useState(false);
 
   const [breadcrumb, setBreadcrumb] = useState<any[]>([]);
 
@@ -73,13 +72,12 @@ export const FolderPage: React.FC = () => {
 
         <div className="lg:col-span-2">
           <div className="bg-surface border border-border rounded-xl p-6">
-            <div className="mb-6">
-              <UploadDropzone
-                folderId={folderId}
-                categoryType={categoryType}
-                onUploaded={() => refresh()}
-              />
-            </div>
+            <button
+              className="w-full bg-gold text-black font-semibold rounded-xl py-3 hover:opacity-90 transition mb-6"
+              onClick={() => setOpenNew(true)}
+            >
+              V•HUB · Novo Asset
+            </button>
             <AssetGrid
               title="Assets nesta pasta"
               assets={assets}
@@ -89,6 +87,13 @@ export const FolderPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <NewAssetModal
+        open={openNew}
+        onClose={() => setOpenNew(false)}
+        initialCategory={null}
+        onCreated={() => refresh()}
+      />
     </div>
   );
 };
