@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAssets, type AssetRow } from '../../../hooks/useAssets';
 import { useAuth } from '../../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../../lib/storageHelpers';
-import { ArrowLeft, ExternalLink, Trash2, Save, Pencil } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trash2, Save, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
 
 const isExternal = (asset: AssetRow) => {
   const source = asset.meta?.source;
@@ -34,6 +34,7 @@ export const AssetDetailPage: React.FC = () => {
   const [tagsText, setTagsText] = React.useState('');
   const [url, setUrl] = React.useState('');
   const [metaJson, setMetaJson] = React.useState('');
+  const [showTech, setShowTech] = React.useState(false);
 
   const canEdit = role === 'admin' || role === 'editor';
   const canDelete = role === 'admin';
@@ -134,6 +135,28 @@ export const AssetDetailPage: React.FC = () => {
   }
 
   const external = isExternal(asset);
+  const meta = asset.meta ?? {};
+
+  // Pretty fields per category (MVP)
+  const prettyFields: Array<{ label: string; value: string }> = [];
+  const push = (label: string, value?: any) => {
+    if (value === undefined || value === null || String(value).trim() === '') return;
+    prettyFields.push({ label, value: String(value) });
+  };
+
+  // Common-ish
+  push('Duração', meta.duracao);
+  push('Versão', meta.versao);
+  push('Personagem', meta.personagem);
+  push('Produto', meta.produto);
+  push('Dimensão', meta.dimensao);
+  push('Nicho', meta.nicho);
+  push('Gênero', meta.genero);
+  push('Tipo', meta.tipo);
+  push('Momento VSL', meta.momento_vsl);
+  push('Emoção/Vibe', meta.emocao);
+  push('Faixa etária', meta.faixa_etaria);
+  push('Gênero do ator', meta.genero_ator);
 
   return (
     <div className="p-6 space-y-6">
@@ -249,33 +272,67 @@ export const AssetDetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <div className="text-xs text-gray-500">{external ? 'URL Externa' : 'Object Path (Storage)'}</div>
-            {editing && external ? (
-              <input
-                className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-            ) : (
-              <div className="mt-1 text-gray-300 text-sm break-all">{asset.url}</div>
-            )}
-          </div>
+          {external && (
+            <div>
+              <div className="text-xs text-gray-500">Link externo</div>
+              {editing ? (
+                <input
+                  className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+              ) : (
+                <div className="mt-1 text-gray-300 text-sm break-all">{asset.url}</div>
+              )}
+            </div>
+          )}
 
-          <div>
-            <div className="text-xs text-gray-500">Meta (JSON)</div>
-            {editing ? (
-              <textarea
-                className="mt-1 w-full h-40 bg-black/40 border border-border rounded-lg px-3 py-2 text-white font-mono text-xs"
-                value={metaJson}
-                onChange={(e) => setMetaJson(e.target.value)}
-              />
-            ) : (
-              <pre className="mt-1 text-xs text-gray-300 bg-black/30 border border-border rounded-lg p-3 overflow-auto">
+          {/* Pretty meta */}
+          {prettyFields.length > 0 && (
+            <div>
+              <div className="text-xs text-gray-500">Detalhes</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {prettyFields.map((f) => (
+                  <div key={f.label} className="px-3 py-2 rounded-xl bg-black/30 border border-border">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">{f.label}</div>
+                    <div className="text-sm text-white">{f.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Technical details (admin only) */}
+          {role === 'admin' && (
+            <div className="pt-2">
+              <button
+                className="w-full flex items-center justify-between text-sm text-gray-300 hover:text-white bg-black/20 border border-border rounded-xl px-3 py-2"
+                onClick={() => setShowTech((v) => !v)}
+              >
+                <span>Detalhes técnicos</span>
+                {showTech ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {showTech && (
+                <div className="mt-2 space-y-2">
+                  {!external && (
+                    <div className="text-xs text-gray-500 break-all">
+                      <span className="text-gray-400">Storage path:</span> {asset.url}
+                    </div>
+                  )}
+                  <pre className="text-xs text-gray-300 bg-black/30 border border-border rounded-lg p-3 overflow-auto">
 {JSON.stringify(asset.meta ?? {}, null, 2)}
-              </pre>
-            )}
-          </div>
+                  </pre>
+                  {editing && (
+                    <textarea
+                      className="w-full h-40 bg-black/40 border border-border rounded-lg px-3 py-2 text-white font-mono text-xs"
+                      value={metaJson}
+                      onChange={(e) => setMetaJson(e.target.value)}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
