@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { getOrgBucketName } from '../lib/storageHelpers';
 
 export type AssetRow = {
   id: string;
@@ -24,7 +25,7 @@ type ListArgs = {
 };
 
 export function useAssets(args?: ListArgs) {
-  const { organizationId } = useAuth();
+  const { organizationId, user, role } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetRow[]>([]);
@@ -73,11 +74,96 @@ export function useAssets(args?: ListArgs) {
     }
   }, [args, organizationId]);
 
+  const uploadAsset = useCallback(async (
+    file: File,
+    opts: { folderId?: string | null; tags: string[]; type?: string | null }
+  ) => {
+    if (!organizationId) throw new Error('organizationId ausente');
+    if (!user?.id) throw new Error('não autenticado');
+    if (role === 'viewer') throw new Error('viewer não pode fazer upload');
+    if (!opts.tags?.length) throw new Error('tags obrigatórias');
+
+    const bucket = getOrgBucketName(organizationId);
+    const safeName = file.name.replace(/\s+/g, '-');
+    const filename = `${Date.now()}-${safeName}`;
+    const folderPath = opts.folderId ? `folders/${opts.folderId}` : 'root';
+    const objectPath = `${folderPath}/${filename}`;
+
+    // 1) Upload to storage (bucket is private)
+    const { error: upErr } = await supabase.storage
+      .from(bucket)
+      .upload(objectPath, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+    if (upErr) throw upErr;
+
+    // 2) Insert in assets
+    // IMPORTANT: store objectPath in assets.url (private storage). UI will create signed URL for preview/download.
+    const sizeMb = file.size / (1024 * 1024);
+    const assetType = opts.type ?? (file.type?.startsWith('video/') ? 'video' : (file.type || null));
+
+    const { data: inserted, error: insErr } = await supabase
+      .from('assets')
+      .insert({
+        name: file.name,
+        url: objectPath,
+        type: assetType,
+        size_mb: sizeMb,
+        tags: opts.tags,
+        folder_id: opts.folderId ?? null,
+        organization_id: organizationId,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+    if (insErr) throw insErr;
+
+    // 3) Update storage_usage incrementally (GB)
+    const deltaGb = sizeMb / 1024;
+    const { data: usage, error: uErr } = await supabase
+      .from('storage_usage')
+      .select('used_space_gb')
+      .eq('organization_id', organizationId)
+      .single();
+    if (uErr) throw uErr;
+
+    const currentGb = Number((usage as any)?.used_space_gb ?? 0);
+    const nextGb = currentGb + deltaGb;
+
+    const { error: updErr } = await supabase
+      .from('storage_usage')
+      .update({
+        used_space_gb: nextGb,
+        last_updated: new Date().toISOString(),
+      })
+      .eq('organization_id', organizationId);
+    if (updErr) throw updErr;
+
+    // 4) Activity log (best-effort)
+    try {
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        action: 'upload',
+        asset_id: inserted?.id ?? null,
+        description: `Upload: ${file.name}`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      // ignore logging failure
+    }
+
+    return inserted?.id as string;
+  }, [organizationId, user, role]);
+
   useEffect(() => {
     list();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
-  const memo = useMemo(() => ({ loading, error, assets, refresh: list }), [loading, error, assets, list]);
+  const memo = useMemo(
+    () => ({ loading, error, assets, refresh: list, uploadAsset }),
+    [loading, error, assets, list, uploadAsset]
+  );
   return memo;
 }

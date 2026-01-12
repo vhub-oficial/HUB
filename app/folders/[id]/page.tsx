@@ -5,13 +5,14 @@ import { useAssets } from '../../../hooks/useAssets';
 import { FolderCard } from '../../../components/Folders/FolderCard';
 import { Breadcrumb } from '../../../components/Folders/Breadcrumb';
 import { AssetGrid } from '../../../components/Assets/AssetGrid';
+import { UploadDropzone } from '../../../components/Assets/UploadDropzone';
 
 export const FolderPage: React.FC = () => {
   const { id } = useParams();
   const folderId = id === 'root' ? null : (id ?? null);
 
   const { folders, loading: foldersLoading, error: foldersError, getBreadcrumb } = useFolders(folderId);
-  const { assets, loading: assetsLoading, error: assetsError } = useAssets({
+  const { assets, loading: assetsLoading, error: assetsError, refresh } = useAssets({
     folderId: folderId, // null => root assets
     limit: 60,
   });
@@ -70,6 +71,9 @@ export const FolderPage: React.FC = () => {
 
         <div className="lg:col-span-2">
           <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="mb-6">
+              <UploadDropzone folderId={folderId} onUploaded={() => refresh()} />
+            </div>
             <AssetGrid
               title="Assets nesta pasta"
               assets={assets}
