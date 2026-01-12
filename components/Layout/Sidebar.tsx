@@ -1,30 +1,31 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  LayoutDashboard, 
-  FolderOpen, 
-  Video, 
-  Mic, 
-  Music, 
-  Activity, 
-  Clapperboard, 
-  Users, 
+import {
+  BadgeCheck,
+  Film,
+  FolderOpen,
+  LayoutDashboard,
+  MessageCircle,
+  Mic2,
+  Music,
   Settings,
-  Sparkles
+  Sparkles,
+  Video,
+  Volume2,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const { role } = useAuth();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const currentTag = searchParams.get('tag');
+  const currentType = searchParams.get('type');
 
-  const isActive = (path: string, tag?: string) => {
-    if (tag) {
-        return currentTag === tag;
+  const isActive = (path: string, type?: string) => {
+    if (type) {
+        return currentType === type;
     }
-    return location.pathname === path && !currentTag;
+    return location.pathname === path && !currentType;
   };
 
   const navItemClass = (active: boolean) => `
@@ -34,7 +35,7 @@ export const Sidebar: React.FC = () => {
       : 'text-gray-400 hover:text-white hover:bg-white/5'}
   `;
 
-  const tagLink = (tag: string) => `/dashboard?tag=${encodeURIComponent(tag)}`;
+  const typeLink = (type: string) => `/dashboard?type=${encodeURIComponent(type)}`;
 
   return (
     <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen fixed left-0 top-0">
@@ -47,56 +48,56 @@ export const Sidebar: React.FC = () => {
       <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar">
         <div className="mb-6">
             <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Main</p>
-            <NavLink to="/dashboard" className={({isActive: rActive}) => navItemClass(rActive && !currentTag)}>
+            <NavLink to="/dashboard" className={({isActive: rActive}) => navItemClass(rActive && !currentType)}>
                 <LayoutDashboard size={18} className="mr-3" />
                 Dashboard
             </NavLink>
-            <NavLink to="/folders/root" className={({isActive: rActive}) => navItemClass(rActive && !currentTag)}>
+            <NavLink to="/folders/root" className={({isActive: rActive}) => navItemClass(rActive && !currentType)}>
                 <FolderOpen size={18} className="mr-3" />
                 Pastas
             </NavLink>
         </div>
 
         <div className="mb-6">
-            <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Smart Filters</p>
+            <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Abas (Categorias)</p>
             
-            <NavLink to={tagLink('deepfake')} className={() => navItemClass(isActive('/dashboard', 'deepfake'))}>
-                <Video size={18} className="mr-3" />
+            <NavLink to={typeLink('deepfakes')} className={() => navItemClass(isActive('/dashboard', 'deepfakes'))}>
+                <Sparkles size={18} className="mr-3" />
                 Deepfakes
             </NavLink>
 
-            <NavLink to={tagLink('voz-clonada')} className={() => navItemClass(isActive('/dashboard', 'voz-clonada'))}>
-                <Mic size={18} className="mr-3" />
-                Vozes Clonadas
+            <NavLink to={typeLink('vozes')} className={() => navItemClass(isActive('/dashboard', 'vozes'))}>
+                <Mic2 size={18} className="mr-3" />
+                Vozes para Clonar
             </NavLink>
 
-            <NavLink to={tagLink('tiktok')} className={() => navItemClass(isActive('/dashboard', 'tiktok'))}>
-                <Activity size={18} className="mr-3" />
-                TikTok Trends
+            <NavLink to={typeLink('tiktok')} className={() => navItemClass(isActive('/dashboard', 'tiktok'))}>
+                <Video size={18} className="mr-3" />
+                TikTok
             </NavLink>
 
-            <NavLink to={tagLink('musica')} className={() => navItemClass(isActive('/dashboard', 'musica'))}>
+            <NavLink to={typeLink('musicas')} className={() => navItemClass(isActive('/dashboard', 'musicas'))}>
                 <Music size={18} className="mr-3" />
                 Músicas
             </NavLink>
 
-            <NavLink to={tagLink('sfx')} className={() => navItemClass(isActive('/dashboard', 'sfx'))}>
-                <Sparkles size={18} className="mr-3" />
+            <NavLink to={typeLink('sfx')} className={() => navItemClass(isActive('/dashboard', 'sfx'))}>
+                <Volume2 size={18} className="mr-3" />
                 SFX
             </NavLink>
 
-             <NavLink to={tagLink('veo3')} className={() => navItemClass(isActive('/dashboard', 'veo3'))}>
-                <Clapperboard size={18} className="mr-3" />
+             <NavLink to={typeLink('veo3')} className={() => navItemClass(isActive('/dashboard', 'veo3'))}>
+                <Film size={18} className="mr-3" />
                 VEO 3
             </NavLink>
 
-             <NavLink to={tagLink('prova-social')} className={() => navItemClass(isActive('/dashboard', 'prova-social'))}>
-                <Users size={18} className="mr-3" />
+             <NavLink to={typeLink('provas-sociais')} className={() => navItemClass(isActive('/dashboard', 'provas-sociais'))}>
+                <BadgeCheck size={18} className="mr-3" />
                 Provas Sociais
             </NavLink>
 
-             <NavLink to={tagLink('ugc')} className={() => navItemClass(isActive('/dashboard', 'ugc'))}>
-                <Users size={18} className="mr-3" />
+             <NavLink to={typeLink('ugc')} className={() => navItemClass(isActive('/dashboard', 'ugc'))}>
+                <MessageCircle size={18} className="mr-3" />
                 Depoimentos UGC
             </NavLink>
         </div>

@@ -6,10 +6,11 @@ import { Button } from '../UI/Button';
 
 type Props = {
   folderId?: string | null;
+  categoryType: string; // category/aba slug
   onUploaded?: () => void;
 };
 
-export const UploadDropzone: React.FC<Props> = ({ folderId = null, onUploaded }) => {
+export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType, onUploaded }) => {
   const { role } = useAuth();
   const { uploadAsset } = useAssets();
   const [tagsText, setTagsText] = useState('');
@@ -26,6 +27,10 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, onUploaded })
       .filter(Boolean);
   }, [tagsText]);
 
+  const normalizedTags = useMemo(() => {
+    return tags.map((t) => t.toLowerCase().replace(/\s+/g, '-'));
+  }, [tags]);
+
   const onDrop = async (acceptedFiles: File[]) => {
     setErr(null);
     setOk(null);
@@ -33,7 +38,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, onUploaded })
       setErr('Seu role não permite upload.');
       return;
     }
-    if (tags.length === 0) {
+    if (normalizedTags.length === 0) {
       setErr('Adicione pelo menos 1 tag (separada por vírgula) antes de enviar.');
       return;
     }
@@ -42,7 +47,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, onUploaded })
 
     setBusy(true);
     try {
-      await uploadAsset(file, { folderId, tags });
+      await uploadAsset(file, { folderId, tags: normalizedTags, categoryType });
       setOk('Upload concluído!');
       // give backend a beat; then refresh list
       setTimeout(() => onUploaded?.(), 300);

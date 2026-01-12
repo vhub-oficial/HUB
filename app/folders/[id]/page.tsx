@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useFolders } from '../../../hooks/useFolders';
 import { useAssets } from '../../../hooks/useAssets';
 import { FolderCard } from '../../../components/Folders/FolderCard';
@@ -9,7 +9,9 @@ import { UploadDropzone } from '../../../components/Assets/UploadDropzone';
 
 export const FolderPage: React.FC = () => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const folderId = id === 'root' ? null : (id ?? null);
+  const categoryType = searchParams.get('type') ?? 'original';
 
   const { folders, loading: foldersLoading, error: foldersError, getBreadcrumb } = useFolders(folderId);
   const { assets, loading: assetsLoading, error: assetsError, refresh } = useAssets({
@@ -72,7 +74,11 @@ export const FolderPage: React.FC = () => {
         <div className="lg:col-span-2">
           <div className="bg-surface border border-border rounded-xl p-6">
             <div className="mb-6">
-              <UploadDropzone folderId={folderId} onUploaded={() => refresh()} />
+              <UploadDropzone
+                folderId={folderId}
+                categoryType={categoryType}
+                onUploaded={() => refresh()}
+              />
             </div>
             <AssetGrid
               title="Assets nesta pasta"
