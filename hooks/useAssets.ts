@@ -229,14 +229,90 @@ export function useAssets(args?: ListArgs) {
     return (data?.id ?? assetId) as string;
   }, [organizationId, user, role]);
 
+  const getAssetById = useCallback(async (id: string) => {
+    if (!organizationId) throw new Error('organizationId ausente');
+    const { data, error } = await supabase
+      .from('assets')
+      .select('id,name,url,type,size_mb,tags,folder_id,organization_id,created_by,created_at,meta')
+      .eq('organization_id', organizationId)
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    return data as AssetRow;
+  }, [organizationId]);
+
+  const updateAsset = useCallback(async (id: string, patch: Partial<AssetRow>) => {
+    if (!organizationId) throw new Error('organizationId ausente');
+    if (!user?.id) throw new Error('não autenticado');
+    if (role === 'viewer') throw new Error('viewer não pode editar');
+    const { error } = await supabase
+      .from('assets')
+      .update({
+        name: patch.name,
+        tags: patch.tags,
+        meta: patch.meta,
+        // allow url update ONLY for external assets (enforced in UI)
+        url: patch.url,
+      })
+      .eq('organization_id', organizationId)
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  }, [organizationId, user, role]);
+
+  const deleteAsset = useCallback(async (asset: AssetRow) => {
+    if (!organizationId) throw new Error('organizationId ausente');
+    if (!user?.id) throw new Error('não autenticado');
+    if (role !== 'admin') throw new Error('Apenas admin pode deletar');
+
+    const source = asset.meta?.source ?? (typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url) ? 'external' : 'storage');
+
+    // 1) delete storage object if needed
+    if (source === 'storage') {
+      const bucket = getOrgBucketName(organizationId);
+      const { error: stErr } = await supabase.storage.from(bucket).remove([asset.url]);
+      if (stErr) throw stErr;
+    }
+
+    // 2) delete row
+    const { error: delErr } = await supabase
+      .from('assets')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('id', asset.id);
+    if (delErr) throw delErr;
+
+    // 3) decrement storage usage (best-effort)
+    try {
+      if (source === 'storage' && asset.size_mb) {
+        const deltaGb = Number(asset.size_mb) / 1024;
+        const { data: usage } = await supabase
+          .from('storage_usage')
+          .select('used_space_gb')
+          .eq('organization_id', organizationId)
+          .single();
+        const currentGb = Number((usage as any)?.used_space_gb ?? 0);
+        const nextGb = Math.max(0, currentGb - deltaGb);
+        await supabase
+          .from('storage_usage')
+          .update({ used_space_gb: nextGb, last_updated: new Date().toISOString() })
+          .eq('organization_id', organizationId);
+      }
+    } catch {
+      // ignore
+    }
+
+    return true;
+  }, [organizationId, user, role]);
+
   useEffect(() => {
     list();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
   const memo = useMemo(
-    () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset }),
-    [loading, error, assets, list, uploadAsset, createAsset]
+    () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset }),
+    [loading, error, assets, list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset]
   );
   return memo;
 }
