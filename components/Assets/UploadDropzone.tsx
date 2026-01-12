@@ -47,7 +47,12 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
 
     setBusy(true);
     try {
-      await uploadAsset(file, { folderId, tags: normalizedTags, categoryType });
+      await uploadAsset(file, {
+        folderId,
+        tags: normalizedTags,
+        categoryType,
+        meta: { source: 'storage' },
+      });
       setOk('Upload concluído!');
       // give backend a beat; then refresh list
       setTimeout(() => onUploaded?.(), 300);

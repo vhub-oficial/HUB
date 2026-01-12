@@ -1,12 +1,19 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetRow } from '../../hooks/useAssets';
-import { Play } from 'lucide-react';
+import { Play, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 
 type Props = {
   asset: AssetRow;
+};
+
+const isExternal = (asset: AssetRow) => {
+  const source = asset.meta?.source;
+  if (source === 'external') return true;
+  // fallback: if url is full http(s), treat as external
+  return typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url);
 };
 
 export const AssetCard: React.FC<Props> = ({ asset }) => {
@@ -19,6 +26,12 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
     (async () => {
       try {
         if (!organizationId) return;
+        if (isExternal(asset)) {
+          // for external assets, prefer thumbnail_url if provided
+          const thumb = asset.meta?.thumbnail_url || '';
+          if (mounted) setSrc(thumb);
+          return;
+        }
         const bucket = getOrgBucketName(organizationId);
         const signed = await createSignedUrl(bucket, asset.url, 3600);
         if (mounted) setSrc(signed);
@@ -38,7 +51,7 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
     >
       <div className="relative aspect-video bg-black/60 overflow-hidden">
         {/* preview */}
-        {src ? (
+        {!isExternal(asset) && src ? (
           <video
             src={src}
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
@@ -46,6 +59,21 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
             playsInline
             preload="metadata"
           />
+        ) : isExternal(asset) && src ? (
+          <img
+            src={src}
+            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+            alt={asset.name}
+            loading="lazy"
+          />
+        ) : isExternal(asset) ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-2">
+            <div className="flex items-center gap-2">
+              <LinkIcon size={16} />
+              <span className="text-sm">Link externo</span>
+            </div>
+            <span className="text-xs text-gray-600">Abra para acessar</span>
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-500">
             Sem preview
@@ -54,7 +82,11 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center">
-            <Play className="text-gold" size={22} />
+            {isExternal(asset) ? (
+              <LinkIcon className="text-gold" size={22} />
+            ) : (
+              <Play className="text-gold" size={22} />
+            )}
           </div>
         </div>
       </div>
