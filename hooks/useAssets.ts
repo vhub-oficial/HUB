@@ -1,63 +1,83 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Asset } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
-interface ListAssetsParams {
-  folderId?: string | null;
-  tag?: string;
-  search?: string;
-}
+export type AssetRow = {
+  id: string;
+  name: string;
+  url: string;
+  type: string | null;
+  size_mb: number | null;
+  tags: string[] | null;
+  folder_id: string | null;
+  organization_id: string | null;
+  created_by: string | null;
+  created_at: string | null;
+};
 
-export const useAssets = ({ folderId, tag, search }: ListAssetsParams) => {
+type ListArgs = {
+  folderId?: string | null; // null => root assets (folder_id is null). undefined => don't filter by folder
+  tag?: string | null;
+  query?: string | null;
+  type?: string | null;
+  limit?: number;
+};
+
+export function useAssets(args?: ListArgs) {
   const { organizationId } = useAuth();
-  const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
+
+  const list = useCallback(async (override?: ListArgs) => {
+    if (!organizationId) return;
+    setLoading(true);
+    setError(null);
+
+    const a = { ...(args ?? {}), ...(override ?? {}) };
+    const limit = a.limit ?? 60;
+
+    try {
+      let q = supabase
+        .from('assets')
+        .select('id,name,url,type,size_mb,tags,folder_id,organization_id,created_by,created_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // folder filtering:
+      // - folderId === null => root assets only (folder_id IS NULL)
+      // - folderId is string => assets within folder_id
+      // - folderId === undefined => no folder filter
+      if (a.folderId === null) q = q.is('folder_id', null);
+      else if (typeof a.folderId === 'string') q = q.eq('folder_id', a.folderId);
+
+      if (a.tag) {
+        // tags is text[] (ARRAY), use contains
+        q = q.contains('tags', [a.tag]);
+      }
+      if (a.query) {
+        q = q.ilike('name', `%${a.query}%`);
+      }
+      if (a.type) {
+        q = q.eq('type', a.type);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      setAssets((data ?? []) as AssetRow[]);
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar assets');
+    } finally {
+      setLoading(false);
+    }
+  }, [args, organizationId]);
 
   useEffect(() => {
-    if (!organizationId) return;
+    list();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
 
-    const fetchAssets = async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-            .from('assets')
-            .select('*')
-            .eq('organization_id', organizationId);
-
-        if (folderId && folderId !== 'root') {
-            query = query.eq('folder_id', folderId);
-        } else if (folderId === 'root') {
-            query = query.is('folder_id', null);
-        }
-        
-        if (tag) {
-            query = query.contains('tags', [tag]);
-        }
-
-        if (search) {
-            query = query.ilike('name', `%${search}%`);
-        }
-
-        const { data, error } = await query.order('created_at', { ascending: false });
-
-        if (error) {
-            // Log the actual message, avoiding [object Object]
-            console.error('Error loading assets:', error.message || error);
-            setAssets([]);
-        } else {
-            setAssets(data as Asset[]);
-        }
-      } catch (err: any) {
-        console.error("Unexpected error fetching assets:", err.message || err);
-        setAssets([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAssets();
-  }, [organizationId, folderId, tag, search]);
-
-  return { assets, loading };
-};
+  const memo = useMemo(() => ({ loading, error, assets, refresh: list }), [loading, error, assets, list]);
+  return memo;
+}

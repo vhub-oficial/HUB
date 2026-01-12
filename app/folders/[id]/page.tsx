@@ -1,66 +1,84 @@
-
-import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useFolders } from '../../../hooks/useFolders';
 import { useAssets } from '../../../hooks/useAssets';
 import { FolderCard } from '../../../components/Folders/FolderCard';
-import { AssetCard } from '../../../components/Assets/AssetCard';
-import { Loader2, ChevronRight } from 'lucide-react';
+import { Breadcrumb } from '../../../components/Folders/Breadcrumb';
+import { AssetGrid } from '../../../components/Assets/AssetGrid';
 
 export const FolderPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const folderId = id === 'root' ? 'root' : id; // Normalize
-  
-  const { folders, loading: foldersLoading } = useFolders(folderId);
-  const { assets, loading: assetsLoading } = useAssets({ folderId });
+  const { id } = useParams();
+  const folderId = id === 'root' ? null : (id ?? null);
 
-  const isLoading = foldersLoading || assetsLoading;
+  const { folders, loading: foldersLoading, error: foldersError, getBreadcrumb } = useFolders(folderId);
+  const { assets, loading: assetsLoading, error: assetsError } = useAssets({
+    folderId: folderId, // null => root assets
+    limit: 60,
+  });
+
+  const [breadcrumb, setBreadcrumb] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (folderId && typeof folderId === 'string') {
+        const chain = await getBreadcrumb(folderId);
+        if (mounted) setBreadcrumb(chain);
+      } else {
+        setBreadcrumb([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [folderId, getBreadcrumb]);
+
+  const title = useMemo(() => {
+    if (folderId === null) return 'Pastas (Root)';
+    const last = breadcrumb?.[breadcrumb.length - 1];
+    return last?.name ? `Pasta: ${last.name}` : 'Pasta';
+  }, [folderId, breadcrumb]);
 
   return (
-    <div className="p-8">
-       {/* Breadcrumb Mock */}
-       <div className="flex items-center text-sm text-gray-500 mb-6">
-          <Link to="/folders/root" className="hover:text-gold transition-colors">Root</Link>
-          {folderId !== 'root' && (
-              <>
-                 <ChevronRight size={14} className="mx-2" />
-                 <span className="text-white">Current Folder</span>
-              </>
-          )}
-       </div>
-
-       <h2 className="text-2xl font-bold text-white mb-6">
-         {folderId === 'root' ? 'All Files' : 'Folder Contents'}
-       </h2>
-
-       {isLoading ? (
-         <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin text-gold" size={40} />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">{title}</h1>
+        <div className="mt-2">
+          <Breadcrumb chain={breadcrumb as any[]} />
         </div>
-       ) : (
-           <>
-            {/* Folders Grid */}
-            {folders.length > 0 && (
-                <div className="mb-10">
-                    <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4 tracking-wider">Folders</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {folders.map(folder => <FolderCard key={folder.id} folder={folder} />)}
-                    </div>
-                </div>
-            )}
+      </div>
 
-            {/* Assets Grid */}
-            <div>
-                <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4 tracking-wider">Assets</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {assets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
-                     {assets.length === 0 && (
-                        <p className="text-gray-600 text-sm">No assets in this folder.</p>
-                    )}
-                </div>
+      {(foldersError || assetsError) && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-300 text-sm">
+          {foldersError ?? assetsError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <h3 className="text-white font-semibold">Subpastas</h3>
+            <div className="mt-4 space-y-3">
+              {foldersLoading && <div className="text-gray-400 text-sm">Carregando...</div>}
+              {!foldersLoading && folders.length === 0 && (
+                <div className="text-gray-400 text-sm">Nenhuma subpasta.</div>
+              )}
+              {folders.map((f) => (
+                <FolderCard key={f.id} folder={f} />
+              ))}
             </div>
-           </>
-       )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <AssetGrid
+              title="Assets nesta pasta"
+              assets={assets}
+              loading={assetsLoading}
+              emptyText="Nenhum asset nessa pasta ainda."
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

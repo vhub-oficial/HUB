@@ -15,7 +15,7 @@ export const DashboardPage: React.FC = () => {
   
   // Fetch assets based on tag (or all if no tag)
   const { assets, loading: assetsLoading } = useAssets({ tag });
-  const { folders, loading: foldersLoading } = useFolders('root');
+  const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
 
