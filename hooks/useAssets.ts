@@ -129,6 +129,7 @@ export function useAssets(args?: ListArgs) {
         folder_id: opts.folderId ?? null,
         organization_id: organizationId,
         created_by: user.id,
+        created_at: new Date().toISOString(),
       })
       .select('id')
       .single();
