@@ -8,29 +8,31 @@ import { FolderCard } from '../../components/Folders/FolderCard';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { NewAssetModal } from '../../components/Assets/NewAssetModal';
 
 export const DashboardPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const tag = searchParams.get('tag') || undefined;
+  const type = searchParams.get('type') || undefined;
+  const [openNew, setOpenNew] = useState(false);
   const { organizationId } = useAuth();
   
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading, refresh } = useAssets({ tag });
+  const { assets, loading: assetsLoading, refresh } = useAssets({ type });
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
 
   // Stats State
   const [stats, setStats] = useState([
-    { label: 'Deepfakes', count: 0, icon: Users, tag: 'deepfake' },
-    { label: 'Voz para Clonar', count: 0, icon: Mic, tag: 'voz-clonada' },
-    { label: 'Vídeos Originais', count: 0, icon: Video, tag: 'original' },
-    { label: 'Tik Tok', count: 0, icon: Smartphone, tag: 'tiktok' },
-    { label: 'Músicas', count: 0, icon: Music, tag: 'musica' },
-    { label: 'SFX', count: 0, icon: Speaker, tag: 'sfx' },
-    { label: 'VEO 3', count: 0, icon: Clapperboard, tag: 'veo3' },
-    { label: 'Provas Sociais', count: 0, icon: Video, tag: 'prova-social' },
-    { label: 'Depoimentos UGC', count: 0, icon: MessageSquare, tag: 'ugc' },
+    { label: 'Deepfakes', count: 0, icon: Users, type: 'deepfakes' },
+    { label: 'Voz para Clonar', count: 0, icon: Mic, type: 'vozes' },
+    { label: 'Vídeos Originais', count: 0, icon: Video, type: 'original' },
+    { label: 'Tik Tok', count: 0, icon: Smartphone, type: 'tiktok' },
+    { label: 'Músicas', count: 0, icon: Music, type: 'musicas' },
+    { label: 'SFX', count: 0, icon: Speaker, type: 'sfx' },
+    { label: 'VEO 3', count: 0, icon: Clapperboard, type: 'veo3' },
+    { label: 'Provas Sociais', count: 0, icon: Video, type: 'provas-sociais' },
+    { label: 'Depoimentos UGC', count: 0, icon: MessageSquare, type: 'ugc' },
   ]);
   const [totalAssets, setTotalAssets] = useState(0);
 
@@ -54,7 +56,7 @@ export const DashboardPage: React.FC = () => {
            .from('assets')
            .select('*', { count: 'exact', head: true })
            .eq('organization_id', organizationId)
-           .contains('tags', [stat.tag]);
+           .eq('type', stat.type);
          return { ...stat, count: count || 0 };
       }));
       setStats(newStats);
@@ -67,8 +69,8 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="p-8 space-y-10 min-h-screen">
       
-      {/* 1. HERO SECTION - Only show on Home (no tag) */}
-      {!tag && (
+      {/* 1. HERO SECTION - Only show on Home (no type) */}
+      {!type && (
         <div className="relative w-full h-64 bg-black rounded-3xl border border-gold/20 flex flex-col items-center justify-center text-center overflow-hidden">
           <div className="absolute top-4 bg-gold/10 text-gold px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-gold/20">
             Hub Oficial
@@ -87,7 +89,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* 2. STATS GRID (Visão Geral) - Only show on Home */}
-      {!tag && (
+      {!type && (
         <section>
             <div className="flex items-center gap-2 mb-6 border-l-4 border-gold pl-4">
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Visão Geral do Acervo</h2>
@@ -95,7 +97,7 @@ export const DashboardPage: React.FC = () => {
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {stats.map((stat, idx) => (
-                    <Link to={`/dashboard?tag=${stat.tag}`} key={idx} className="block group">
+                    <Link to={`/dashboard?type=${stat.type}`} key={idx} className="block group">
                         <div className="bg-[#0f0f0f] border border-[#222] hover:border-gold/50 rounded-xl p-4 flex flex-col items-center justify-center transition-all h-28">
                             <stat.icon className="text-gold mb-2 group-hover:scale-110 transition-transform" size={20} />
                             <span className="text-xl font-bold text-white">{stat.count}</span>
@@ -117,7 +119,7 @@ export const DashboardPage: React.FC = () => {
       <section>
          <div className="flex items-center justify-between mb-6 border-l-4 border-gold pl-4">
             <h2 className="text-sm font-bold text-gray-200 uppercase tracking-widest">
-                {tag ? `Filtro: ${tag.replace('-', ' ')}` : 'Últimos Adicionados'}
+                {type ? `Filtro: ${type.replace('-', ' ')}` : 'Últimos Adicionados'}
             </h2>
          </div>
 
@@ -127,10 +129,24 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
-                 <UploadDropzone folderId={null} onUploaded={() => refresh()} />
+                 <div className="space-y-4">
+                   <button
+                     className="w-full bg-gold text-black font-semibold rounded-xl py-3 hover:opacity-90 transition"
+                     onClick={() => setOpenNew(true)}
+                   >
+                     V•HUB · Novo Asset
+                   </button>
+                   {type && (
+                     <UploadDropzone
+                       folderId={null}
+                       categoryType={type}
+                       onUploaded={() => refresh()}
+                     />
+                   )}
+                 </div>
 
                  {/* Show Folders if strictly filtering or on home (logic per requirements) */}
-                 {folders.length > 0 && !tag && (
+                 {folders.length > 0 && !type && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
                         {folders.map(folder => <FolderCard key={folder.id} folder={folder} />)}
                     </div>
@@ -149,6 +165,13 @@ export const DashboardPage: React.FC = () => {
              </div>
          )}
       </section>
+
+      <NewAssetModal
+        open={openNew}
+        onClose={() => setOpenNew(false)}
+        initialCategory={type ?? null}
+        onCreated={() => refresh()}
+      />
     </div>
   );
 };

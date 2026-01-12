@@ -14,13 +14,16 @@ export type AssetRow = {
   organization_id: string | null;
   created_by: string | null;
   created_at: string | null;
+  meta?: any | null;
 };
 
 type ListArgs = {
   folderId?: string | null; // null => root assets (folder_id is null). undefined => don't filter by folder
-  tag?: string | null;
+  type?: string | null; // category/aba
   query?: string | null;
-  type?: string | null;
+  assetKind?: string | null; // legacy (if you used assets.type as "video"), keep for later if needed
+  metaFilters?: Record<string, string | null | undefined>;
+  tagsAny?: string[] | null; // free tags[] filter (contains all provided)
   limit?: number;
 };
 
@@ -41,7 +44,7 @@ export function useAssets(args?: ListArgs) {
     try {
       let q = supabase
         .from('assets')
-        .select('id,name,url,type,size_mb,tags,folder_id,organization_id,created_by,created_at')
+        .select('id,name,url,type,size_mb,tags,folder_id,organization_id,created_by,created_at,meta')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -53,15 +56,23 @@ export function useAssets(args?: ListArgs) {
       if (a.folderId === null) q = q.is('folder_id', null);
       else if (typeof a.folderId === 'string') q = q.eq('folder_id', a.folderId);
 
-      if (a.tag) {
-        // tags is text[] (ARRAY), use contains
-        q = q.contains('tags', [a.tag]);
+      // Category / Aba
+      if (a.type) {
+        q = q.eq('type', a.type);
+      }
+      // Free tags[] (all tags must be present)
+      if (a.tagsAny && a.tagsAny.length) {
+        q = q.contains('tags', a.tagsAny);
       }
       if (a.query) {
         q = q.ilike('name', `%${a.query}%`);
       }
-      if (a.type) {
-        q = q.eq('type', a.type);
+      // meta filters (exact match)
+      if (a.metaFilters) {
+        for (const [k, v] of Object.entries(a.metaFilters)) {
+          if (!v) continue;
+          q = q.filter(`meta->>${k}`, 'eq', v);
+        }
       }
 
       const { data, error } = await q;
@@ -89,7 +100,7 @@ export function useAssets(args?: ListArgs) {
 
   const uploadAsset = useCallback(async (
     file: File,
-    opts: { folderId?: string | null; tags: string[]; type?: string | null }
+    opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any }
   ) => {
     if (!organizationId) throw new Error('organizationId ausente');
     if (!user?.id) throw new Error('não autenticado');
@@ -114,7 +125,8 @@ export function useAssets(args?: ListArgs) {
     // 2) Insert in assets
     // IMPORTANT: store objectPath in assets.url (private storage). UI will create signed URL for preview/download.
     const sizeMb = file.size / (1024 * 1024);
-    const assetType = opts.type ?? (file.type?.startsWith('video/') ? 'video' : (file.type || null));
+    // Here, assets.type is the CATEGORY/ABA (deepfakes, tiktok, etc.)
+    const categoryType = opts.categoryType;
     const assetId = genUUID();
 
     const { data: inserted, error: insErr } = await supabase
@@ -123,13 +135,14 @@ export function useAssets(args?: ListArgs) {
         id: assetId,
         name: file.name,
         url: objectPath,
-        type: assetType,
+        type: categoryType,
         size_mb: sizeMb,
         tags: opts.tags,
         folder_id: opts.folderId ?? null,
         organization_id: organizationId,
         created_by: user.id,
         created_at: new Date().toISOString(),
+        meta: opts.meta ?? {},
       })
       .select('id')
       .single();
@@ -172,14 +185,50 @@ export function useAssets(args?: ListArgs) {
     return (inserted?.id ?? assetId) as string;
   }, [organizationId, user, role]);
 
+  // Metadata-only asset (no storage upload). Used by the “V•HUB · NOVO ASSET” modal.
+  const createAsset = useCallback(async (payload: {
+    name: string;
+    url: string;
+    categoryType: string;
+    tags: string[];
+    folderId?: string | null;
+    meta?: any;
+  }) => {
+    if (!organizationId) throw new Error('organizationId ausente');
+    if (!user?.id) throw new Error('não autenticado');
+    if (role === 'viewer') throw new Error('viewer não pode criar assets');
+    if (!payload.tags?.length) throw new Error('tags obrigatórias');
+
+    const assetId = genUUID();
+    const { data, error } = await supabase
+      .from('assets')
+      .insert({
+        id: assetId,
+        name: payload.name,
+        url: payload.url,
+        type: payload.categoryType,
+        size_mb: null,
+        tags: payload.tags,
+        folder_id: payload.folderId ?? null,
+        organization_id: organizationId,
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+        meta: payload.meta ?? {},
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return (data?.id ?? assetId) as string;
+  }, [organizationId, user, role]);
+
   useEffect(() => {
     list();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
   const memo = useMemo(
-    () => ({ loading, error, assets, refresh: list, uploadAsset }),
-    [loading, error, assets, list, uploadAsset]
+    () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset }),
+    [loading, error, assets, list, uploadAsset, createAsset]
   );
   return memo;
 }
