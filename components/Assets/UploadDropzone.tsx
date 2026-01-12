@@ -44,7 +44,8 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, onUploaded })
     try {
       await uploadAsset(file, { folderId, tags });
       setOk('Upload concluído!');
-      onUploaded?.();
+      // give backend a beat; then refresh list
+      setTimeout(() => onUploaded?.(), 300);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro no upload');
     } finally {
