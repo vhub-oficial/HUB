@@ -6,6 +6,7 @@ import { Sidebar } from './components/Layout/Sidebar';
 import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './app/dashboard/page';
 import { FolderPage } from './app/folders/[id]/page';
+import { AssetDetailPage } from './app/assets/[id]/page';
 import { LoginPage } from './app/auth/login/page';
 import { PendingAccessPage } from './app/pending/page';
 import { InviteAcceptPage } from './app/auth/invite/[token]/page';
@@ -62,6 +63,9 @@ const App: React.FC = () => {
             {/* Folder Routes */}
             <Route path="/folders/:id" element={<FolderPage />} />
             <Route path="/folders/root" element={<FolderPage />} />
+
+            {/* Asset detail */}
+            <Route path="/assets/:id" element={<AssetDetailPage />} />
             
             {/* Admin Route (Simple Guard) */}
             <Route
