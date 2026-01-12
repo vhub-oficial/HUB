@@ -8,6 +8,7 @@ import { DashboardPage } from './app/dashboard/page';
 import { FolderPage } from './app/folders/[id]/page';
 import { LoginPage } from './app/auth/login/page';
 import { PendingAccessPage } from './app/pending/page';
+import { InviteAcceptPage } from './app/auth/invite/[token]/page';
 import { RequireRole } from './components/Guards/RequireRole';
 import { AdminPage } from './app/admin/page';
 import { Loader2 } from 'lucide-react';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/pending" element={<PendingAccessPage />} />
+          <Route path="/invite/:token" element={<InviteAcceptPage />} />
           
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

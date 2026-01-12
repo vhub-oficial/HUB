@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/UI/Button';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Shown when the auth user exists but there is no matching row in public.users yet.
@@ -8,6 +9,7 @@ import { Button } from '../../components/UI/Button';
  */
 export const PendingAccessPage: React.FC = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-6">
@@ -16,10 +18,13 @@ export const PendingAccessPage: React.FC = () => {
         <p className="text-gray-400 mt-2">
           Sua conta foi criada ({user?.email}), mas ainda não está vinculada a uma organização.
           <br />
-          Peça para um <span className="text-gold font-semibold">Admin</span> te convidar ou concluir o provisionamento.
+          Peça para um <span className="text-gold font-semibold">Admin</span> te convidar e abra o link do convite para aceitar.
         </p>
 
         <div className="mt-6 flex gap-3">
+          <Button onClick={() => navigate('/admin')} variant="secondary">
+            Abrir Admin (se você for admin)
+          </Button>
           <Button onClick={() => signOut()} variant="secondary">
             Sair
           </Button>
