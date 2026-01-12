@@ -8,6 +8,8 @@ import { DashboardPage } from './app/dashboard/page';
 import { FolderPage } from './app/folders/[id]/page';
 import { LoginPage } from './app/auth/login/page';
 import { PendingAccessPage } from './app/pending/page';
+import { RequireRole } from './components/Guards/RequireRole';
+import { AdminPage } from './app/admin/page';
 import { Loader2 } from 'lucide-react';
 
 // Protected Route Wrapper
@@ -59,7 +61,10 @@ const App: React.FC = () => {
             <Route path="/folders/:id" element={<FolderPage />} />
             
             {/* Admin Route (Simple Guard) */}
-            <Route path="/admin" element={<div className="p-10 text-xl text-center">Admin Panel (Role Restricted)</div>} />
+            <Route
+              path="/admin"
+              element={<RequireRole required="admin"><AdminPage /></RequireRole>}
+            />
           </Route>
           
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
