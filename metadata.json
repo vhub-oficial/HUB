@@ -1,0 +1,5 @@
+{
+  "name": "V-HUB",
+  "description": "Ultra Dark Mode SaaS for managing video assets with organization-based RBAC and Supabase integration.",
+  "requestFramePermissions": []
+}
