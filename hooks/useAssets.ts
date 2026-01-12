@@ -74,6 +74,19 @@ export function useAssets(args?: ListArgs) {
     }
   }, [args, organizationId]);
 
+  const genUUID = () => {
+    // Browser-safe UUID (supported in modern browsers)
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return (crypto as any).randomUUID();
+    }
+    // Fallback (rare): RFC4122-ish
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
   const uploadAsset = useCallback(async (
     file: File,
     opts: { folderId?: string | null; tags: string[]; type?: string | null }
@@ -102,10 +115,12 @@ export function useAssets(args?: ListArgs) {
     // IMPORTANT: store objectPath in assets.url (private storage). UI will create signed URL for preview/download.
     const sizeMb = file.size / (1024 * 1024);
     const assetType = opts.type ?? (file.type?.startsWith('video/') ? 'video' : (file.type || null));
+    const assetId = genUUID();
 
     const { data: inserted, error: insErr } = await supabase
       .from('assets')
       .insert({
+        id: assetId,
         name: file.name,
         url: objectPath,
         type: assetType,
@@ -153,7 +168,7 @@ export function useAssets(args?: ListArgs) {
       // ignore logging failure
     }
 
-    return inserted?.id as string;
+    return (inserted?.id ?? assetId) as string;
   }, [organizationId, user, role]);
 
   useEffect(() => {
