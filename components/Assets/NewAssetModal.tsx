@@ -53,8 +53,37 @@ export const NewAssetModal: React.FC<{
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
+  // ✅ IMPORTANT: hooks must be called unconditionally (fixes React 310)
+  const acceptByCategory = React.useMemo(() => {
+    if (category === 'musicas' || category === 'sfx' || category === 'vozes') {
+      return { 'audio/*': ['.mp3', '.wav', '.m4a', '.aac', '.ogg'] };
+    }
+    if (category === 'provas-sociais') {
+      return { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] };
+    }
+    return { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] };
+  }, [category]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (files) => setFile(files?.[0] ?? null),
+    multiple: false,
+    accept: acceptByCategory,
+    disabled: busy || !(role === 'admin' || role === 'editor'),
+  });
+
   React.useEffect(() => {
     setCategory(initialCategory);
+    // reset form when opening
+    if (open) {
+      setErr(null);
+      setBusy(false);
+      setFile(null);
+      setName('');
+      setUrl('');
+      setTagsText('');
+      setMeta({});
+      setMode('upload');
+    }
   }, [initialCategory, open]);
 
   if (!open) return null;
@@ -98,13 +127,6 @@ export const NewAssetModal: React.FC<{
       setBusy(false);
     }
   };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (files) => setFile(files?.[0] ?? null),
-    multiple: false,
-    accept: { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] },
-    disabled: busy || !canCreate,
-  });
 
   // Render “schema” básico por categoria (MVP). Depois refinamos exatamente como seus prints.
   const renderCategoryFields = () => {
@@ -281,7 +303,7 @@ export const NewAssetModal: React.FC<{
               >
                 <input {...getInputProps()} />
                 <div className="text-white font-medium">
-                  {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o vídeo aqui…' : 'Arraste e solte um vídeo aqui')}
+                  {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte um arquivo aqui')}
                 </div>
                 <div className="text-gray-400 text-sm mt-1">
                   ou clique para escolher um arquivo
