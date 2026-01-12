@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   LayoutDashboard, 
   FolderOpen, 
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
+  const { role } = useAuth();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const currentTag = searchParams.get('tag');
@@ -98,12 +100,14 @@ export const Sidebar: React.FC = () => {
         </div>
       </nav>
 
-      <div className="p-4 border-t border-border">
-         <NavLink to="/admin" className={({isActive: rActive}) => navItemClass(rActive)}>
-            <Settings size={18} className="mr-3" />
-            Admin & Planos
-        </NavLink>
-      </div>
+      {role === 'admin' && (
+        <div className="p-4 border-t border-border">
+           <NavLink to="/admin" className={({isActive: rActive}) => navItemClass(rActive)}>
+              <Settings size={18} className="mr-3" />
+              Admin & Planos
+          </NavLink>
+        </div>
+      )}
     </aside>
   );
 };

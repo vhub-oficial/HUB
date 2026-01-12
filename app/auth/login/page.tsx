@@ -11,6 +11,7 @@ export const LoginPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   // Auto-redirect if logged in
   useEffect(() => {
@@ -27,12 +28,14 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setLocalLoading(true);
 
     try {
       if (isRegistering) {
         if (!name) throw new Error("O nome é obrigatório para o cadastro.");
         await signUp(email, password, name);
+        setInfo('Conta criada. Se você foi convidado para uma organização, faça login e o acesso será liberado.');
       } else {
         await signIn(email, password);
       }
@@ -40,6 +43,7 @@ export const LoginPage: React.FC = () => {
       // we only redirect when state is fully propagated.
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro durante a autenticação.");
+    } finally {
       setLocalLoading(false);
     }
   };
@@ -47,6 +51,7 @@ export const LoginPage: React.FC = () => {
   const toggleMode = () => {
     setIsRegistering(!isRegistering);
     setError(null);
+    setInfo(null);
   };
 
   return (
@@ -66,6 +71,12 @@ export const LoginPage: React.FC = () => {
             <div className="mb-4 bg-red-900/20 border border-red-900/50 p-3 rounded flex items-center gap-2 text-red-200 text-sm">
                 <AlertCircle size={16} />
                 <span>{error}</span>
+            </div>
+        )}
+
+        {info && (
+            <div className="mb-4 bg-gold/10 border border-gold/30 p-3 rounded text-gold text-sm">
+                {info}
             </div>
         )}
 

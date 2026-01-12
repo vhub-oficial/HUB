@@ -7,11 +7,12 @@ import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './app/dashboard/page';
 import { FolderPage } from './app/folders/[id]/page';
 import { LoginPage } from './app/auth/login/page';
+import { PendingAccessPage } from './app/pending/page';
 import { Loader2 } from 'lucide-react';
 
 // Protected Route Wrapper
 const ProtectedLayout = () => {
-  const { profile, loading } = useAuth();
+  const { profile, loading, user, needsProvisioning } = useAuth();
 
   if (loading) {
     return (
@@ -22,6 +23,10 @@ const ProtectedLayout = () => {
   }
 
   if (!profile) {
+    // If the auth user exists but there's no public.users row yet, show pending screen.
+    if (user && needsProvisioning) {
+      return <PendingAccessPage />;
+    }
     return <Navigate to="/login" replace />;
   }
 
@@ -44,6 +49,7 @@ const App: React.FC = () => {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/pending" element={<PendingAccessPage />} />
           
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

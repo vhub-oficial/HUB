@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Role } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -9,6 +9,13 @@ interface AuthContextType {
   organizationId: string | null;
   role: Role | null;
   loading: boolean;
+  /**
+   * True when the auth user exists but there is no matching row in public.users yet.
+   * This usually means the user still needs to be invited / provisioned in the tenant.
+   */
+  needsProvisioning: boolean;
+  /** Simple role guard helper */
+  hasRole: (required: Role) => boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -16,18 +23,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Helper to generate a valid UUID v4
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsProvisioning, setNeedsProvisioning] = useState(false);
 
   useEffect(() => {
     // 1. Get initial session
@@ -49,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
+        setNeedsProvisioning(false);
         setLoading(false);
       }
     });
@@ -58,33 +59,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
-      // Fetch from 'users' table
+      // Fetch from 'users' table (RLS protected)
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (data) {
-        setProfile(data as UserProfile);
-      } else {
-        // Fallback: Use metadata from the session if DB record doesn't exist yet
-        const user = await supabase.auth.getUser();
-        const metadata = user.data.user?.user_metadata;
-        
-        // Ensure we use a valid UUID for organization_id to avoid DB type errors
-        const fallbackOrgId = metadata?.organization_id || generateUUID();
-        
-        setProfile({
-          id: userId,
-          email: user.data.user?.email || '',
-          name: metadata?.full_name || 'User',
-          organization_id: fallbackOrgId,
-          role: metadata?.role || 'viewer',
-        });
+      if (error) {
+        // If the row doesn't exist yet, we should NOT fabricate org/role.
+        // This keeps multi-tenant security intact and avoids "random org" bugs.
+        console.warn('Profile not found or inaccessible:', error.message || error);
+        setProfile(null);
+        setNeedsProvisioning(true);
+        return;
       }
+
+      if (!data) {
+        setProfile(null);
+        setNeedsProvisioning(true);
+        return;
+      }
+
+      setProfile(data as UserProfile);
+      setNeedsProvisioning(false);
     } catch (err) {
       console.error("Error fetching profile:", err);
+      setProfile(null);
+      setNeedsProvisioning(true);
     } finally {
       setLoading(false);
     }
@@ -103,17 +105,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, name: string) => {
     setLoading(true);
-    // Use valid UUID for organization_id
-    const newOrgId = generateUUID();
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          full_name: name,
-          organization_id: newOrgId, 
-          role: 'admin'
+          full_name: name
         }
       }
     });
@@ -130,18 +128,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSession(null);
   };
 
+  const hasRole = (required: Role) => {
+    const current = profile?.role;
+    if (!current) return false;
+    if (current === 'admin') return true;
+    if (required === 'viewer') return true;
+    return current === required;
+  };
+
+  const memoed = useMemo(
+    () => ({
+      user: session?.user ?? null,
+      profile,
+      organizationId: profile?.organization_id ?? null,
+      role: profile?.role ?? null,
+      loading,
+      needsProvisioning,
+      hasRole,
+      signIn,
+      signUp,
+      signOut,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, profile, loading, needsProvisioning]
+  );
+
   return (
     <AuthContext.Provider
-      value={{
-        user: session?.user ?? null,
-        profile,
-        organizationId: profile?.organization_id ?? null,
-        role: profile?.role ?? null,
-        loading,
-        signIn,
-        signUp,
-        signOut,
-      }}
+      value={memoed}
     >
       {children}
     </AuthContext.Provider>
