@@ -1,27 +1,24 @@
-
 import React from 'react';
-import { Folder as FolderType } from '../../types';
+import { useNavigate } from 'react-router-dom';
+import type { FolderRow } from '../../hooks/useFolders';
 import { Folder } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
-interface FolderCardProps {
-  folder: FolderType;
-}
-
-export const FolderCard: React.FC<FolderCardProps> = ({ folder }) => {
+export const FolderCard: React.FC<{ folder: FolderRow }> = ({ folder }) => {
+  const navigate = useNavigate();
   return (
-    <Link to={`/folders/${folder.id}`} className="block">
-      <div className="bg-surface border border-border rounded-lg p-4 hover:border-gold/50 hover:bg-surfaceHighlight transition-colors group cursor-pointer h-full flex flex-col justify-between">
-        <div className="flex items-center space-x-3">
-          <Folder className="text-goldDim group-hover:text-gold transition-colors" size={24} fill="currentColor" fillOpacity={0.2} />
-          <span className="text-sm font-medium text-gray-300 group-hover:text-white truncate">
-            {folder.name}
-          </span>
+    <button
+      onClick={() => navigate(`/folders/${folder.id}`)}
+      className="text-left bg-surface border border-border hover:border-gold/40 rounded-xl p-4 transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center">
+          <Folder className="text-gold" size={18} />
         </div>
-        <div className="mt-4 text-xs text-gray-600">
-            Created: {new Date(folder.created_at).toLocaleDateString()}
+        <div>
+          <div className="text-white font-medium">{folder.name}</div>
+          <div className="text-xs text-gray-500">Abrir pasta</div>
         </div>
       </div>
-    </Link>
+    </button>
   );
 };

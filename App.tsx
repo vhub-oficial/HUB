@@ -61,6 +61,7 @@ const App: React.FC = () => {
             
             {/* Folder Routes */}
             <Route path="/folders/:id" element={<FolderPage />} />
+            <Route path="/folders/root" element={<FolderPage />} />
             
             {/* Admin Route (Simple Guard) */}
             <Route

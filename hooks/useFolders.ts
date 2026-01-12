@@ -1,49 +1,87 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Folder } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
-export const useFolders = (parentId: string | null) => {
+export type FolderRow = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  organization_id: string | null;
+  created_by: string | null;
+  created_at: string | null;
+};
+
+export function useFolders(parentId?: string | null) {
   const { organizationId } = useAuth();
-  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [folders, setFolders] = useState<FolderRow[]>([]);
 
-  useEffect(() => {
+  const list = useCallback(async (overrideParentId?: string | null) => {
     if (!organizationId) return;
+    setLoading(true);
+    setError(null);
+    const pid = overrideParentId !== undefined ? overrideParentId : parentId;
 
-    const fetchFolders = async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-            .from('folders')
-            .select('*')
-            .eq('organization_id', organizationId);
+    try {
+      let q = supabase
+        .from('folders')
+        .select('id,name,parent_id,organization_id,created_by,created_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-        if (parentId === 'root' || parentId === null) {
-            query = query.is('parent_id', null);
-        } else {
-            query = query.eq('parent_id', parentId);
-        }
+      // root: parent_id IS NULL
+      if (pid === null) q = q.is('parent_id', null);
+      else if (typeof pid === 'string') q = q.eq('parent_id', pid);
 
-        const { data, error } = await query;
-
-        if (error) {
-            // Log the actual message, avoiding [object Object]
-            console.error("Error fetching folders:", error.message || error);
-            setFolders([]);
-        } else {
-            setFolders(data as Folder[]);
-        }
-      } catch (err: any) {
-        console.error("Unexpected error fetching folders:", err.message || err);
-        setFolders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchFolders();
+      const { data, error } = await q;
+      if (error) throw error;
+      setFolders((data ?? []) as FolderRow[]);
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar pastas');
+    } finally {
+      setLoading(false);
+    }
   }, [organizationId, parentId]);
 
-  return { folders, loading };
-};
+  const getFolderById = useCallback(async (id: string) => {
+    if (!organizationId) return null;
+    const { data, error } = await supabase
+      .from('folders')
+      .select('id,name,parent_id,organization_id,created_by,created_at')
+      .eq('organization_id', organizationId)
+      .eq('id', id)
+      .single();
+    if (error) return null;
+    return data as FolderRow;
+  }, [organizationId]);
+
+  const getBreadcrumb = useCallback(async (folderId: string) => {
+    // builds chain up to root
+    const chain: FolderRow[] = [];
+    let currentId: string | null = folderId;
+    let guard = 0;
+    while (currentId && guard < 20) {
+      // eslint-disable-next-line no-await-in-loop
+      const node = await getFolderById(currentId);
+      if (!node) break;
+      chain.unshift(node);
+      currentId = node.parent_id;
+      guard++;
+    }
+    return chain;
+  }, [getFolderById]);
+
+  useEffect(() => {
+    // default behavior: list children of parentId (or null for root)
+    if (parentId !== undefined) list();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
+
+  const memo = useMemo(() => ({
+    loading, error, folders, refresh: list, getFolderById, getBreadcrumb
+  }), [loading, error, folders, list, getFolderById, getBreadcrumb]);
+
+  return memo;
+}
