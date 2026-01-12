@@ -142,7 +142,12 @@ export function useAssets(args?: ListArgs) {
         organization_id: organizationId,
         created_by: user.id,
         created_at: new Date().toISOString(),
-        meta: opts.meta ?? {},
+        meta: {
+          source: 'storage',
+          original_name: file.name,
+          mime_type: file.type || null,
+          ...((opts.meta ?? {}) as any),
+        },
       })
       .select('id')
       .single();
@@ -213,7 +218,10 @@ export function useAssets(args?: ListArgs) {
         organization_id: organizationId,
         created_by: user.id,
         created_at: new Date().toISOString(),
-        meta: payload.meta ?? {},
+        meta: {
+          source: 'external',
+          ...((payload.meta ?? {}) as any),
+        },
       })
       .select('id')
       .single();

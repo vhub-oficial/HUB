@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { useDropzone } from 'react-dropzone';
 import { useAssets } from '../../hooks/useAssets';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,6 +24,16 @@ function normalizeTags(input: string) {
     .map((t) => t.replace(/\s+/g, '-'));
 }
 
+function detectProvider(url: string) {
+  const u = url.toLowerCase();
+  if (u.includes('drive.google.com')) return 'gdrive';
+  if (u.includes('docs.google.com')) return 'gdocs';
+  if (u.includes('dropbox.com')) return 'dropbox';
+  if (u.includes('minimax')) return 'minimax';
+  if (u.includes('mega.nz')) return 'mega';
+  return 'generic';
+}
+
 export const NewAssetModal: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -30,13 +41,15 @@ export const NewAssetModal: React.FC<{
   onCreated?: () => void;
 }> = ({ open, onClose, initialCategory, onCreated }) => {
   const { role } = useAuth();
-  const { createAsset } = useAssets();
+  const { createAsset, uploadAsset } = useAssets();
   const [category, setCategory] = React.useState<string | null>(initialCategory);
   const [folderId] = React.useState<string | null>(null); // keep simple for now
   const [name, setName] = React.useState('');
   const [url, setUrl] = React.useState('');
   const [tagsText, setTagsText] = React.useState('');
   const [meta, setMeta] = React.useState<Record<string, any>>({});
+  const [mode, setMode] = React.useState<'upload' | 'external'>('upload');
+  const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -54,19 +67,29 @@ export const NewAssetModal: React.FC<{
     if (!category) return setErr('Selecione uma categoria.');
     const tags = normalizeTags(tagsText);
     if (!tags.length) return setErr('Tags são obrigatórias.');
-    if (!url.trim()) return setErr('Link do ativo é obrigatório.');
     if (!name.trim()) return setErr('Nome do asset é obrigatório.');
 
     setBusy(true);
     try {
-      await createAsset({
-        name: name.trim(),
-        url: url.trim(),
-        categoryType: category,
-        tags,
-        folderId,
-        meta: { ...meta, category },
-      });
+      if (mode === 'external') {
+        if (!url.trim()) return setErr('Link do ativo é obrigatório.');
+        await createAsset({
+          name: name.trim(),
+          url: url.trim(),
+          categoryType: category,
+          tags,
+          folderId,
+          meta: { ...meta, category, source: 'external', provider: detectProvider(url.trim()) },
+        });
+      } else {
+        if (!file) return setErr('Selecione um arquivo para upload.');
+        await uploadAsset(file, {
+          folderId,
+          tags,
+          categoryType: category,
+          meta: { ...meta, category, source: 'storage' },
+        });
+      }
       onCreated?.();
       onClose();
     } catch (e: any) {
@@ -75,6 +98,13 @@ export const NewAssetModal: React.FC<{
       setBusy(false);
     }
   };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (files) => setFile(files?.[0] ?? null),
+    multiple: false,
+    accept: { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] },
+    disabled: busy || !canCreate,
+  });
 
   // Render “schema” básico por categoria (MVP). Depois refinamos exatamente como seus prints.
   const renderCategoryFields = () => {
@@ -208,12 +238,56 @@ export const NewAssetModal: React.FC<{
             </div>
           )}
 
+          {/* Mode selector */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setMode('upload')}
+              className={[
+                "px-3 py-2 rounded-lg border text-sm transition",
+                mode === 'upload' ? "bg-gold/10 border-gold/40 text-gold" : "bg-black/30 border-border text-gray-300 hover:text-white"
+              ].join(' ')}
+            >
+              Upload (Storage)
+            </button>
+            <button
+              onClick={() => setMode('external')}
+              className={[
+                "px-3 py-2 rounded-lg border text-sm transition",
+                mode === 'external' ? "bg-gold/10 border-gold/40 text-gold" : "bg-black/30 border-border text-gray-300 hover:text-white"
+              ].join(' ')}
+            >
+              Conectar Link Externo
+            </button>
+          </div>
+
           {/* Base fields */}
           <div className="space-y-3">
             <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
               placeholder="Nome do asset" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Link do ativo (Google Drive / Minimax / etc.)" value={url} onChange={(e) => setUrl(e.target.value)} />
+            {mode === 'external' ? (
+              <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                placeholder="Link do ativo (Google Drive / Minimax / etc.)"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+            ) : (
+              <div
+                {...getRootProps()}
+                className={[
+                  "rounded-xl border border-dashed p-5 text-center transition-colors",
+                  isDragActive ? "border-gold/50 bg-gold/5" : "border-border bg-black/20",
+                  (!canCreate || busy) ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-gold/40"
+                ].join(' ')}
+              >
+                <input {...getInputProps()} />
+                <div className="text-white font-medium">
+                  {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o vídeo aqui…' : 'Arraste e solte um vídeo aqui')}
+                </div>
+                <div className="text-gray-400 text-sm mt-1">
+                  ou clique para escolher um arquivo
+                </div>
+              </div>
+            )}
             {renderCategoryFields()}
             <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
               placeholder="Tags / palavras-chave (separe por vírgula) *" value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
