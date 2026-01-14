@@ -32,17 +32,18 @@ export const DashboardPage: React.FC = () => {
     meta: metaFromUrl,
   });
 
+  const prevTypeRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (!type) return;
-    setFilters({ tags: '', meta: {} });
-    const sp = new URLSearchParams(location.search);
-    sp.set('type', type);
-    sp.delete('tags');
-    for (const key of Array.from(sp.keys())) {
-      if (key.startsWith('m_')) sp.delete(key);
+    if (prevTypeRef.current === null) {
+      prevTypeRef.current = type;
+      return;
     }
-    navigate({ pathname: location.pathname, search: `?${sp.toString()}` }, { replace: true });
-  }, [typeRaw, type, location.pathname, location.search, navigate]);
+    if (prevTypeRef.current !== type) {
+      prevTypeRef.current = type;
+      setFilters({ tags: '', meta: {} });
+    }
+  }, [type]);
 
   // Sync state when URL changes (back/forward)
   useEffect(() => {
