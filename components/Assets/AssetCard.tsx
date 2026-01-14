@@ -1,12 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetRow } from '../../hooks/useAssets';
-import { Play, Link as LinkIcon } from 'lucide-react';
+import { Play, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
+import { useAssets } from '../../hooks/useAssets';
 
 type Props = {
   asset: AssetRow;
+  onDeleted?: () => void;
 };
 
 const isExternal = (asset: AssetRow) => {
@@ -16,9 +18,10 @@ const isExternal = (asset: AssetRow) => {
   return typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url);
 };
 
-export const AssetCard: React.FC<Props> = ({ asset }) => {
+export const AssetCard: React.FC<Props> = ({ asset, onDeleted }) => {
   const navigate = useNavigate();
-  const { organizationId } = useAuth();
+  const { organizationId, role } = useAuth();
+  const { deleteAsset } = useAssets();
   const [src, setSrc] = React.useState<string>('');
 
   React.useEffect(() => {
@@ -47,8 +50,40 @@ export const AssetCard: React.FC<Props> = ({ asset }) => {
   return (
     <button
       onClick={() => navigate(`/assets/${asset.id}`)}
-      className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors"
+      className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative"
     >
+      {/* Quick actions */}
+      <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {(role === 'admin' || role === 'editor') && (
+          <button
+            className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/assets/${asset.id}?edit=1`);
+            }}
+            title="Editar"
+          >
+            <Pencil size={16} />
+          </button>
+        )}
+        {role === 'admin' && (
+          <button
+            className="w-9 h-9 rounded-lg bg-black/50 border border-border text-red-200 hover:border-red-500/40 flex items-center justify-center"
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!confirm('Deletar este asset?')) return;
+              await deleteAsset(asset);
+              onDeleted?.();
+            }}
+            title="Deletar"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
+
       <div className="relative aspect-video bg-black/60 overflow-hidden">
         {/* preview */}
         {!isExternal(asset) && src ? (

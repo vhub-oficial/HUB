@@ -7,9 +7,10 @@ type Props = {
   assets: AssetRow[];
   loading?: boolean;
   emptyText?: string;
+  onRefresh?: () => void;
 };
 
-export const AssetGrid: React.FC<Props> = ({ title, assets, loading, emptyText }) => {
+export const AssetGrid: React.FC<Props> = ({ title, assets, loading, emptyText, onRefresh }) => {
   return (
     <div>
       {title && (
@@ -26,9 +27,9 @@ export const AssetGrid: React.FC<Props> = ({ title, assets, loading, emptyText }
         <div className="text-gray-400 text-sm">{emptyText ?? 'Nenhum asset encontrado.'}</div>
       )}
 
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {assets.map((a) => (
-          <AssetCard key={a.id} asset={a} />
+          <AssetCard key={a.id} asset={a} onDeleted={onRefresh} />
         ))}
       </div>
     </div>

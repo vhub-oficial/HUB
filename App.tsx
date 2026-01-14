@@ -8,6 +8,7 @@ import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './app/dashboard/page';
 import { FolderPage } from './app/folders/[id]/page';
 import { AssetDetailPage } from './app/assets/[id]/page';
+import { ProfilePage } from './app/profile/page';
 import { LoginPage } from './app/auth/login/page';
 import { PendingAccessPage } from './app/pending/page';
 import { InviteAcceptPage } from './app/auth/invite/[token]/page';
@@ -75,6 +76,7 @@ const App: React.FC = () => {
 
               {/* Asset detail */}
               <Route path="/assets/:id" element={<AssetDetailPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
 
               {/* Admin Route (Simple Guard) */}
               <Route
