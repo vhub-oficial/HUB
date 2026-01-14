@@ -33,6 +33,15 @@ export function useAssets(args?: ListArgs) {
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetRow[]>([]);
 
+  // ✅ stable key to avoid infinite refetch when args object identity changes
+  const argsKey = useMemo(() => {
+    try {
+      return JSON.stringify(args ?? {});
+    } catch {
+      return 'args';
+    }
+  }, [args]);
+
   const list = useCallback(async (override?: ListArgs) => {
     if (!organizationId) return;
     setLoading(true);
@@ -310,7 +319,8 @@ export function useAssets(args?: ListArgs) {
   useEffect(() => {
     if (!organizationId) return;
     list();
-  }, [organizationId, list, args]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, argsKey]);
 
   const memo = useMemo(
     () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset }),

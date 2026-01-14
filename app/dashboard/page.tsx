@@ -94,19 +94,15 @@ export const DashboardPage: React.FC = () => {
 
   const { options } = useFilterOptions(type);
 
-  // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading, refresh } = useAssets({
+  const assetsArgs = useMemo(() => ({
     type,
     tagsAny,
     metaFilters: filters.meta,
     limit: 60,
-  });
+  }), [type, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
-  useEffect(() => {
-    if (!type) return;
-    const timer = setTimeout(() => refresh(), 200);
-    return () => clearTimeout(timer);
-  }, [type, filters.tags, JSON.stringify(filters.meta), refresh]);
+  // Fetch assets based on tag (or all if no tag)
+  const { assets, loading: assetsLoading } = useAssets(assetsArgs);
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
