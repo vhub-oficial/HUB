@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
 import { AssetCard } from '../../components/Assets/AssetCard';
@@ -7,16 +7,91 @@ import { FolderCard } from '../../components/Folders/FolderCard';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { NewAssetModal } from '../../components/Assets/NewAssetModal';
+import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 
 export const DashboardPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const type = searchParams.get('type') || undefined;
-  const [openNew, setOpenNew] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const typeRaw = searchParams.get('type');
+  const type = typeRaw ? typeRaw.toLowerCase() : undefined;
   const { organizationId } = useAuth();
   
+  // Read filters from URL (persistência)
+  const q0 = searchParams.get('q') ?? '';
+  const tags0 = searchParams.get('tags') ?? '';
+
+  const metaFromUrl: Record<string, string> = {};
+  for (const [k, v] of searchParams.entries()) {
+    if (!k.startsWith('m_')) continue;
+    metaFromUrl[k.slice(2)] = v;
+  }
+
+  const [filters, setFilters] = useState<FiltersValue>({
+    q: q0,
+    tags: tags0,
+    meta: metaFromUrl,
+  });
+
+  // Sync state when URL changes (back/forward)
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const nextQ = sp.get('q') ?? '';
+    const nextTags = sp.get('tags') ?? '';
+    const nextMeta: Record<string, string> = {};
+    for (const [k, v] of sp.entries()) {
+      if (!k.startsWith('m_')) continue;
+      nextMeta[k.slice(2)] = v;
+    }
+    setFilters({ q: nextQ, tags: nextTags, meta: nextMeta });
+  }, [location.search]);
+
+  // Apply filters to URL (debounced)
+  useEffect(() => {
+    if (!type) return;
+    const sp = new URLSearchParams(location.search);
+    sp.set('type', type);
+
+    if (filters.q.trim()) sp.set('q', filters.q.trim());
+    else sp.delete('q');
+
+    if (filters.tags.trim()) sp.set('tags', filters.tags.trim());
+    else sp.delete('tags');
+
+    for (const key of Array.from(sp.keys())) {
+      if (key.startsWith('m_')) sp.delete(key);
+    }
+    for (const [k, v] of Object.entries(filters.meta)) {
+      if (!v || !v.trim()) continue;
+      sp.set(`m_${k}`, v.trim());
+    }
+
+    const next = `?${sp.toString()}`;
+    if (next !== location.search) {
+      const t = setTimeout(() => {
+        navigate({ pathname: location.pathname, search: next }, { replace: true });
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [filters, type, location.pathname, location.search, navigate]);
+
+  const tagsAny = useMemo(() => {
+    if (!filters.tags.trim()) return null;
+    return filters.tags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => t.toLowerCase().replace(/\s+/g, '-'));
+  }, [filters.tags]);
+
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading, refresh } = useAssets({ type });
+  const { assets, loading: assetsLoading } = useAssets({
+    type,
+    query: filters.q || null,
+    tagsAny,
+    metaFilters: filters.meta,
+    limit: 60,
+  });
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
@@ -128,14 +203,14 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
-                 <div className="space-y-4">
-                   <button
-                     className="w-full bg-gold text-black font-semibold rounded-xl py-3 hover:opacity-90 transition"
-                     onClick={() => setOpenNew(true)}
-                   >
-                     V•HUB · Novo Asset
-                   </button>
-                 </div>
+                 {type && (
+                   <FiltersBar
+                     type={type}
+                     value={filters}
+                     onChange={setFilters}
+                     onClear={() => setFilters({ q: '', tags: '', meta: {} })}
+                   />
+                 )}
 
                  {/* Show Folders if strictly filtering or on home (logic per requirements) */}
                  {folders.length > 0 && !type && (
@@ -158,12 +233,6 @@ export const DashboardPage: React.FC = () => {
          )}
       </section>
 
-      <NewAssetModal
-        open={openNew}
-        onClose={() => setOpenNew(false)}
-        initialCategory={type ?? null}
-        onCreated={() => refresh()}
-      />
     </div>
   );
 };

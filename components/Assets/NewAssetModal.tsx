@@ -230,7 +230,7 @@ export const NewAssetModal: React.FC<{
       <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl overflow-hidden">
         <div className="p-5 flex items-center justify-between border-b border-border">
           <div>
-            <div className="text-gold font-semibold">V•HUB · NOVO ASSET</div>
+            <div className="text-gold font-semibold">+ Novo Asset</div>
             <div className="text-xs text-gray-500">{category ? category.toUpperCase() : 'SELECIONE UMA CATEGORIA'}</div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white">

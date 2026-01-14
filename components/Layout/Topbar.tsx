@@ -30,7 +30,7 @@ export const Topbar: React.FC = () => {
         <div className="flex items-center space-x-4">
           {profile?.role !== 'viewer' && (
               <Button size="sm" className="hidden sm:flex" onClick={() => setOpenNew(true)}>
-                  <Plus size={16} className="mr-2" /> Novo Asset
+                  <Plus size={16} className="mr-2" /> + Novo Asset
               </Button>
           )}
           
