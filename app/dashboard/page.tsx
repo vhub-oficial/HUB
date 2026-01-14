@@ -15,7 +15,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const typeRaw = searchParams.get('type');
-  const type = typeRaw ? typeRaw.toLowerCase() : undefined;
+  const type = typeRaw ? typeRaw.toLowerCase() : null;
   const { organizationId } = useAuth();
   
   // Read filters from URL (persistência)
@@ -31,6 +31,18 @@ export const DashboardPage: React.FC = () => {
     tags: tags0,
     meta: metaFromUrl,
   });
+
+  useEffect(() => {
+    if (!type) return;
+    setFilters({ tags: '', meta: {} });
+    const sp = new URLSearchParams(location.search);
+    sp.set('type', type);
+    sp.delete('tags');
+    for (const key of Array.from(sp.keys())) {
+      if (key.startsWith('m_')) sp.delete(key);
+    }
+    navigate({ pathname: location.pathname, search: `?${sp.toString()}` }, { replace: true });
+  }, [typeRaw, type, location.pathname, location.search, navigate]);
 
   // Sync state when URL changes (back/forward)
   useEffect(() => {
@@ -83,12 +95,18 @@ export const DashboardPage: React.FC = () => {
   const { options } = useFilterOptions(type);
 
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading } = useAssets({
+  const { assets, loading: assetsLoading, refresh } = useAssets({
     type,
     tagsAny,
     metaFilters: filters.meta,
     limit: 60,
   });
+
+  useEffect(() => {
+    if (!type) return;
+    const timer = setTimeout(() => refresh(), 200);
+    return () => clearTimeout(timer);
+  }, [type, filters.tags, JSON.stringify(filters.meta), refresh]);
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;

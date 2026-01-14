@@ -2,6 +2,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UIProvider, useUI } from './contexts/UIContext';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './app/dashboard/page';
@@ -13,10 +14,12 @@ import { InviteAcceptPage } from './app/auth/invite/[token]/page';
 import { RequireRole } from './components/Guards/RequireRole';
 import { AdminPage } from './app/admin/page';
 import { Loader2 } from 'lucide-react';
+import { NewAssetModal } from './components/Assets/NewAssetModal';
 
 // Protected Route Wrapper
 const ProtectedLayout = () => {
   const { profile, loading, user, needsProvisioning } = useAuth();
+  const { newAssetOpen, initialCategory, closeNewAsset } = useUI();
 
   if (loading) {
     return (
@@ -43,6 +46,11 @@ const ProtectedLayout = () => {
           <Outlet />
         </main>
       </div>
+      <NewAssetModal
+        open={newAssetOpen}
+        onClose={closeNewAsset}
+        initialCategory={initialCategory}
+      />
     </div>
   );
 };
@@ -51,31 +59,33 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <HashRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/pending" element={<PendingAccessPage />} />
-          <Route path="/invite/:token" element={<InviteAcceptPage />} />
-          
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            
-            {/* Folder Routes */}
-            <Route path="/folders/:id" element={<FolderPage />} />
-            <Route path="/folders/root" element={<FolderPage />} />
+        <UIProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/pending" element={<PendingAccessPage />} />
+            <Route path="/invite/:token" element={<InviteAcceptPage />} />
 
-            {/* Asset detail */}
-            <Route path="/assets/:id" element={<AssetDetailPage />} />
-            
-            {/* Admin Route (Simple Guard) */}
-            <Route
-              path="/admin"
-              element={<RequireRole required="admin"><AdminPage /></RequireRole>}
-            />
-          </Route>
-          
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+
+              {/* Folder Routes */}
+              <Route path="/folders/:id" element={<FolderPage />} />
+              <Route path="/folders/root" element={<FolderPage />} />
+
+              {/* Asset detail */}
+              <Route path="/assets/:id" element={<AssetDetailPage />} />
+
+              {/* Admin Route (Simple Guard) */}
+              <Route
+                path="/admin"
+                element={<RequireRole required="admin"><AdminPage /></RequireRole>}
+              />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </UIProvider>
       </HashRouter>
     </AuthProvider>
   );

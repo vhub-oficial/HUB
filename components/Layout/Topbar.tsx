@@ -4,14 +4,14 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Search, Bell, Plus } from 'lucide-react';
 import { Button } from '../UI/Button';
-import { NewAssetModal } from '../Assets/NewAssetModal';
+import { useUI } from '../../contexts/UIContext';
 
 export const Topbar: React.FC = () => {
   const { profile, signOut } = useAuth();
   const location = useLocation();
-  const [openNew, setOpenNew] = React.useState(false);
   const sp = new URLSearchParams(location.search);
   const type = sp.get('type');
+  const { openNewAsset } = useUI();
 
   return (
     <>
@@ -29,7 +29,11 @@ export const Topbar: React.FC = () => {
 
         <div className="flex items-center space-x-4">
           {profile?.role !== 'viewer' && (
-              <Button size="sm" className="hidden sm:flex" onClick={() => setOpenNew(true)}>
+              <Button
+                size="sm"
+                className="hidden sm:flex"
+                onClick={() => openNewAsset(type ? type.toLowerCase() : null)}
+              >
                   <Plus size={16} className="mr-2" /> + Novo Asset
               </Button>
           )}
@@ -52,11 +56,6 @@ export const Topbar: React.FC = () => {
           </div>
         </div>
       </header>
-      <NewAssetModal
-        open={openNew}
-        onClose={() => setOpenNew(false)}
-        initialCategory={type ? type.toLowerCase() : null}
-      />
     </>
   );
 };

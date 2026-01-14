@@ -308,9 +308,9 @@ export function useAssets(args?: ListArgs) {
   }, [organizationId, user, role]);
 
   useEffect(() => {
+    if (!organizationId) return;
     list();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId]);
+  }, [organizationId, list, args]);
 
   const memo = useMemo(
     () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset }),
