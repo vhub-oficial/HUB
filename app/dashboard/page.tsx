@@ -16,6 +16,7 @@ export const DashboardPage: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const typeRaw = searchParams.get('type');
   const type = typeRaw ? typeRaw.toLowerCase() : null;
+  const q = searchParams.get('q') ?? '';
   const { organizationId } = useAuth();
   
   // Read filters from URL (persistência)
@@ -99,11 +100,12 @@ export const DashboardPage: React.FC = () => {
     type,
     tagsAny,
     metaFilters: filters.meta,
+    query: q ? q : null,
     limit: 60,
-  }), [type, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+  }), [type, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading } = useAssets(assetsArgs);
+  const { assets, loading: assetsLoading, refresh } = useAssets(assetsArgs);
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
@@ -233,9 +235,9 @@ export const DashboardPage: React.FC = () => {
                  )}
 
                  {/* Asset Grid */}
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     {assets.length > 0 ? (
-                        assets.map(asset => <AssetCard key={asset.id} asset={asset} />)
+                        assets.map(asset => <AssetCard key={asset.id} asset={asset} onDeleted={refresh} />)
                     ) : (
                         <div className="col-span-full py-16 text-center border border-dashed border-[#222] rounded-xl">
                             <p className="text-gray-500">Nenhum ativo encontrado nesta seção.</p>

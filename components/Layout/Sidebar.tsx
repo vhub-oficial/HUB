@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   BadgeCheck,
   Film,
-  FolderOpen,
+  User,
   LayoutDashboard,
   MessageCircle,
   Mic2,
@@ -52,9 +52,9 @@ export const Sidebar: React.FC = () => {
                 <LayoutDashboard size={18} className="mr-3" />
                 Dashboard
             </NavLink>
-            <NavLink to="/folders/root" className={({isActive: rActive}) => navItemClass(rActive && !currentType)}>
-                <FolderOpen size={18} className="mr-3" />
-                Pastas
+            <NavLink to="/profile" className={({isActive: rActive}) => navItemClass(rActive)}>
+                <User size={18} className="mr-3" />
+                Perfil
             </NavLink>
         </div>
 

@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import { useInvite } from '../../hooks/useInvite';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/UI/Button';
 import { supabase } from '../../lib/supabase';
@@ -8,18 +7,13 @@ const roles = ['viewer', 'editor', 'admin'] as const;
 
 export const AdminPage: React.FC = () => {
   const { organizationId } = useAuth();
-  const { loading, error, success, sendInvite, clear } = useInvite();
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<(typeof roles)[number]>('viewer');
-  const [inviteId, setInviteId] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
-
-  const inviteLink = useMemo(() => {
-    if (!inviteId) return null;
-    // HashRouter: include #/ route
-    return `${window.location.origin}/#/invite/${inviteId}`;
-  }, [inviteId]);
+  const [org, setOrg] = useState<any>(null);
+  const [usage, setUsage] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -27,38 +21,45 @@ export const AdminPage: React.FC = () => {
       if (!organizationId) return;
       setJoinBusy(true);
       try {
-        const { data, error } = await supabase
-          .from('organizations')
-          .select('join_code')
-          .eq('id', organizationId)
-          .single();
-        if (!error && mounted) setJoinCode((data as any)?.join_code ?? null);
+        const [{ data: orgData }, { data: usageData }, { data: usersData }] = await Promise.all([
+          supabase.from('organizations').select('id,name,plan,storage_limit_gb,join_code').eq('id', organizationId).single(),
+          supabase.from('storage_usage').select('used_space_gb,last_updated').eq('organization_id', organizationId).single(),
+          supabase.from('users').select('id,email,name,role,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
+        ]);
+        if (!mounted) return;
+        setOrg(orgData ?? null);
+        setUsage(usageData ?? null);
+        setUsers(usersData ?? []);
+        setJoinCode((orgData as any)?.join_code ?? null);
       } finally {
         if (mounted) setJoinBusy(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [organizationId]);
-
-  const onCreate = async () => {
-    clear();
-    setInviteId(null);
-    const data = await sendInvite(email.trim(), role);
-    if (data?.id) setInviteId(data.id);
-  };
-
-  const copy = async () => {
-    if (!inviteLink) return;
-    await navigator.clipboard.writeText(inviteLink);
-    alert('Link copiado!');
-  };
 
   const copyJoin = async () => {
     if (!joinCode) return;
     await navigator.clipboard.writeText(joinCode);
     alert('Código copiado!');
+  };
+
+  const updateRole = async (userId: string, nextRole: (typeof roles)[number]) => {
+    setErr(null);
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: nextRole })
+        .eq('organization_id', organizationId)
+        .eq('id', userId);
+      if (error) throw error;
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: nextRole } : u)));
+    } catch (e: any) {
+      setErr(e?.message ?? 'Erro ao atualizar role');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -71,12 +72,33 @@ export const AdminPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
         {/* Join code */}
         <div className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-white font-semibold">Código da organização</h2>
+          <h2 className="text-white font-semibold">Organização</h2>
           <p className="text-gray-400 text-sm mt-1">
-            Compartilhe este código para novos usuários entrarem na sua organização.
+            Visão e controle básico da sua organização.
           </p>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="bg-black/30 border border-border rounded-lg p-4">
+              <div className="text-xs text-gray-500">Nome</div>
+              <div className="text-white font-semibold mt-1">{org?.name ?? '—'}</div>
+            </div>
+            <div className="bg-black/30 border border-border rounded-lg p-4">
+              <div className="text-xs text-gray-500">Plano</div>
+              <div className="text-white font-semibold mt-1">{org?.plan ?? '—'}</div>
+            </div>
+            <div className="bg-black/30 border border-border rounded-lg p-4">
+              <div className="text-xs text-gray-500">Limite (GB)</div>
+              <div className="text-white font-semibold mt-1">{org?.storage_limit_gb ?? '—'}</div>
+            </div>
+            <div className="bg-black/30 border border-border rounded-lg p-4">
+              <div className="text-xs text-gray-500">Usado (GB)</div>
+              <div className="text-white font-semibold mt-1">{usage?.used_space_gb ?? '—'}</div>
+            </div>
+          </div>
+
           <div className="mt-4 bg-black/30 border border-border rounded-lg p-4 flex items-center justify-between gap-3">
             <div className="text-white font-mono text-sm break-all">
               {joinBusy ? 'Carregando...' : (joinCode ?? '—')}
@@ -90,71 +112,53 @@ export const AdminPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Invites */}
         <div className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-white font-semibold">Convidar usuário</h2>
+          <h2 className="text-white font-semibold">Usuários</h2>
           <p className="text-gray-400 text-sm mt-1">
-            MVP: cria um registro em <code className="text-white/80">invites</code> e gera um link.
+            Gerencie membros e roles (admin, editor, viewer).
           </p>
 
-          {error && (
-            <div className="mt-4 bg-red-500/10 border border-red-500/30 p-3 rounded text-red-300 text-sm">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="mt-4 bg-gold/10 border border-gold/30 p-3 rounded text-gold text-sm">
-              {success}
+          {err && (
+            <div className="mt-3 bg-red-500/10 border border-red-500/30 p-3 rounded text-red-300 text-sm">
+              {err}
             </div>
           )}
 
-          <div className="mt-5 space-y-4">
-            <div>
-              <label className="text-sm text-gray-400">E-mail</label>
-              <input
-                className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ex: editor@agencia.com"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400">Role</label>
-              <select
-                className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                value={role}
-                onChange={(e) => setRole(e.target.value as any)}
-              >
-                {roles.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
+          <div className="mt-4 overflow-auto border border-border rounded-xl">
+            <table className="w-full text-sm">
+              <thead className="bg-black/30 text-gray-400">
+                <tr>
+                  <th className="text-left p-3">Usuário</th>
+                  <th className="text-left p-3">E-mail</th>
+                  <th className="text-left p-3">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-t border-border">
+                    <td className="p-3 text-white">{u.name ?? '—'}</td>
+                    <td className="p-3 text-gray-300">{u.email}</td>
+                    <td className="p-3">
+                      <select
+                        className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                        value={u.role ?? 'viewer'}
+                        disabled={busy}
+                        onChange={(e) => updateRole(u.id, e.target.value as any)}
+                      >
+                        {roles.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
                 ))}
-              </select>
-            </div>
-
-            <div className="flex gap-3">
-              <Button onClick={onCreate} disabled={loading || !email.trim()}>
-                {loading ? 'Criando...' : 'Criar convite'}
-              </Button>
-            </div>
-
-            {inviteLink && (
-              <div className="mt-4 border border-border rounded-lg p-3 bg-black/30">
-                <div className="text-xs text-gray-400">Link do convite</div>
-                <div className="text-sm text-white break-all mt-1">{inviteLink}</div>
-                <div className="mt-3 flex gap-3">
-                  <Button onClick={copy}>Copiar link</Button>
-                  <Button variant="secondary" onClick={() => window.open(inviteLink, '_blank')!}>
-                    Abrir
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-500 mt-3">
-                  O usuário deve fazer login com o e-mail convidado e aceitar o convite nessa rota.
-                </p>
-              </div>
-            )}
+                {users.length === 0 && (
+                  <tr className="border-t border-border">
+                    <td className="p-3 text-gray-500" colSpan={3}>Nenhum usuário encontrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

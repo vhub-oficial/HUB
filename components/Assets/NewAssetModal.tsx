@@ -191,8 +191,15 @@ export const NewAssetModal: React.FC<{
             <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
               placeholder="Produto/Objeto do insert" onChange={(e) => set('produto', e.target.value)} />
             <div className="grid grid-cols-2 gap-3">
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Dimensão (ex: 1080x1920)" onChange={(e) => set('dimensao', e.target.value)} />
+              <select
+                className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                defaultValue=""
+                onChange={(e) => set('dimensao', e.target.value)}
+              >
+                <option value="">Dimensão</option>
+                <option value="HORIZONTAL">Horizontal</option>
+                <option value="VERTICAL">Vertical</option>
+              </select>
               <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                 placeholder="Duração (ex: 0:05)" onChange={(e) => set('duracao', e.target.value)} />
             </div>
