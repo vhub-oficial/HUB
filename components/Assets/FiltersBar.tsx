@@ -1,71 +1,67 @@
 import React from 'react';
 
-type Field = {
-  key: string;
-  label: string;
-  placeholder?: string;
-};
-
-const SPEC: Record<string, { fields: Field[] }> = {
-  deepfakes: {
+const SPEC_LABELS: Record<string, { title: string; fields: { key: string; labelAll: string }[] }> = {
+  veo3: {
+    title: 'VEO 3',
     fields: [
-      { key: 'personagem', label: 'Personagem', placeholder: 'ex: adele' },
-      { key: 'versao', label: 'Versão', placeholder: 'ex: v1' },
+      { key: 'produto', labelAll: 'TODOS OS PRODUTOS' },
+      { key: 'dimensao', labelAll: 'TODAS AS DIMENSÕES' },
+    ],
+  },
+  deepfakes: {
+    title: 'DEEPFAKES',
+    fields: [
+      { key: 'personagem', labelAll: 'TODOS OS PERSONAGENS' },
+      { key: 'versao', labelAll: 'TODAS AS VERSÕES' },
     ],
   },
   vozes: {
+    title: 'VOZ PRA CLONAR',
     fields: [
-      { key: 'duracao', label: 'Duração', placeholder: 'ex: 0:15' },
+      { key: 'duracao', labelAll: 'TODAS AS DURAÇÕES' },
     ],
   },
   tiktok: {
+    title: 'TIKTOK',
     fields: [
-      { key: 'nicho', label: 'Nicho', placeholder: 'ex: motivacional' },
-      { key: 'genero', label: 'Gênero/Estilo', placeholder: 'ex: masculino' },
-      { key: 'tipo', label: 'Tipo', placeholder: 'ex: hook' },
+      { key: 'nicho', labelAll: 'TODOS OS NICHOS' },
+      { key: 'genero', labelAll: 'TODOS OS GÊNEROS' },
+      { key: 'tipo', labelAll: 'TODOS OS TIPOS' },
     ],
   },
   musicas: {
+    title: 'ÁUDIO',
     fields: [
-      { key: 'momento_vsl', label: 'Momento VSL', placeholder: 'ex: abertura' },
-      { key: 'emocao', label: 'Emoção/Vibe', placeholder: 'ex: urgência' },
+      { key: 'momento_vsl', labelAll: 'MOMENTOS DA VSL' },
+      { key: 'emocao', labelAll: 'TODAS AS EMOÇÕES' },
     ],
   },
   sfx: {
+    title: 'ÁUDIO',
     fields: [
-      { key: 'momento_vsl', label: 'Momento VSL', placeholder: 'ex: CTA' },
-      { key: 'emocao', label: 'Emoção/Vibe', placeholder: 'ex: impacto' },
-    ],
-  },
-  veo3: {
-    fields: [
-      { key: 'produto', label: 'Produto/Objeto', placeholder: 'ex: relógio' },
-      { key: 'dimensao', label: 'Dimensão', placeholder: 'ex: 1080x1920' },
+      { key: 'momento_vsl', labelAll: 'MOMENTOS DA VSL' },
+      { key: 'emocao', labelAll: 'TODAS AS EMOÇÕES' },
     ],
   },
   'provas-sociais': {
+    title: 'PROVAS SOCIAIS',
     fields: [
-      { key: 'nicho', label: 'Nicho', placeholder: 'ex: emagrecimento' },
-      { key: 'genero', label: 'Gênero', placeholder: 'ex: homem' },
+      { key: 'nicho', labelAll: 'TODOS OS NICHOS' },
+      { key: 'genero', labelAll: 'TODOS OS GÊNEROS' },
     ],
   },
   ugc: {
+    title: 'DEPOIMENTOS UGC',
     fields: [
-      { key: 'genero_ator', label: 'Gênero do ator', placeholder: 'ex: mulher' },
-      { key: 'faixa_etaria', label: 'Faixa etária', placeholder: 'ex: adulto' },
-      { key: 'duracao', label: 'Duração', placeholder: 'ex: 1:00' },
+      { key: 'genero_ator', labelAll: 'TODOS OS GÊNEROS' },
+      { key: 'faixa_etaria', labelAll: 'TODAS AS IDADES' },
     ],
   },
 };
 
-function normTag(t: string) {
-  return t.trim().toLowerCase().replace(/\s+/g, '-');
-}
-
 export type FiltersValue = {
-  q: string;
-  tags: string; // comma string
-  meta: Record<string, string>;
+  tags: string; // single tag (ou vazio)
+  meta: Record<string, string>; // selects
 };
 
 export const FiltersBar: React.FC<{
@@ -73,75 +69,52 @@ export const FiltersBar: React.FC<{
   value: FiltersValue;
   onChange: (next: FiltersValue) => void;
   onClear: () => void;
-}> = ({ type, value, onChange, onClear }) => {
-  const spec = SPEC[type]?.fields ?? [];
+  options: {
+    tags: string[];
+    meta: Record<string, string[]>;
+  };
+}> = ({ type, value, onChange, onClear, options }) => {
+  const spec = SPEC_LABELS[type];
+  if (!spec) return null;
 
   return (
-    <div className="bg-surface border border-border rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-white font-semibold">Filtros</div>
-          <div className="text-xs text-gray-500">Aba: {type}</div>
-        </div>
-        <button
-          onClick={onClear}
-          className="text-sm px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40"
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 text-gold font-bold text-xs tracking-widest uppercase">
+        <span>⚡</span>
+        <span>FILTROS {spec.title}</span>
+      </div>
+
+      {spec.fields.map((f) => (
+        <select
+          key={f.key}
+          className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40"
+          value={value.meta[f.key] ?? ''}
+          onChange={(e) => onChange({ ...value, meta: { ...value.meta, [f.key]: e.target.value } })}
         >
-          Limpar filtros
-        </button>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="md:col-span-1">
-          <div className="text-xs text-gray-500 mb-1">Buscar por nome</div>
-          <input
-            className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-            placeholder="ex: take 1"
-            value={value.q}
-            onChange={(e) => onChange({ ...value, q: e.target.value })}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <div className="text-xs text-gray-500 mb-1">Tags (separe por vírgula)</div>
-          <input
-            className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-            placeholder="ex: deepfake, ugc, tiktok"
-            value={value.tags}
-            onChange={(e) => onChange({ ...value, tags: e.target.value })}
-            onBlur={() => {
-              // normalize on blur for consistency
-              const normalized = value.tags
-                .split(',')
-                .map(normTag)
-                .filter(Boolean)
-                .join(', ');
-              onChange({ ...value, tags: normalized });
-            }}
-          />
-        </div>
-      </div>
-
-      {spec.length > 0 && (
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          {spec.map((f) => (
-            <div key={f.key}>
-              <div className="text-xs text-gray-500 mb-1">{f.label}</div>
-              <input
-                className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder={f.placeholder ?? ''}
-                value={value.meta[f.key] ?? ''}
-                onChange={(e) =>
-                  onChange({
-                    ...value,
-                    meta: { ...value.meta, [f.key]: e.target.value },
-                  })
-                }
-              />
-            </div>
+          <option value="">{f.labelAll}</option>
+          {(options.meta?.[f.key] ?? []).map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
           ))}
-        </div>
-      )}
+        </select>
+      ))}
+
+      <select
+        className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40"
+        value={value.tags ?? ''}
+        onChange={(e) => onChange({ ...value, tags: e.target.value })}
+      >
+        <option value="">TODAS AS TAGS</option>
+        {options.tags.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+
+      <button
+        onClick={onClear}
+        className="bg-black/20 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-300 hover:border-gold/40"
+      >
+        LIMPAR
+      </button>
     </div>
   );
 };

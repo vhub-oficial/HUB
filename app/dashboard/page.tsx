@@ -8,8 +8,7 @@ import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, M
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
-import { FiltersBarMinimal } from '../../components/Assets/FiltersBarMinimal';
-import { useAssetFilterOptions } from '../../hooks/useAssetFilterOptions';
+import { useFilterOptions } from '../../hooks/useFilterOptions';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -20,11 +19,7 @@ export const DashboardPage: React.FC = () => {
   const { organizationId } = useAuth();
   
   // Read filters from URL (persistência)
-  const q0 = searchParams.get('q') ?? '';
   const tags0 = searchParams.get('tags') ?? '';
-  const produto0 = searchParams.get('produto');
-  const dimensao0 = searchParams.get('dimensao');
-  const tag0 = searchParams.get('tag');
 
   const metaFromUrl: Record<string, string> = {};
   for (const [k, v] of searchParams.entries()) {
@@ -33,28 +28,20 @@ export const DashboardPage: React.FC = () => {
   }
 
   const [filters, setFilters] = useState<FiltersValue>({
-    q: q0,
     tags: tags0,
     meta: metaFromUrl,
   });
-  const [produto, setProduto] = useState<string | null>(produto0 || null);
-  const [dimensao, setDimensao] = useState<string | null>(dimensao0 || null);
-  const [tag, setTag] = useState<string | null>(tag0 || null);
 
   // Sync state when URL changes (back/forward)
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
-    const nextQ = sp.get('q') ?? '';
     const nextTags = sp.get('tags') ?? '';
     const nextMeta: Record<string, string> = {};
     for (const [k, v] of sp.entries()) {
       if (!k.startsWith('m_')) continue;
       nextMeta[k.slice(2)] = v;
     }
-    setFilters({ q: nextQ, tags: nextTags, meta: nextMeta });
-    setProduto(sp.get('produto'));
-    setDimensao(sp.get('dimensao'));
-    setTag(sp.get('tag'));
+    setFilters({ tags: nextTags, meta: nextMeta });
   }, [location.search]);
 
   // Apply filters to URL (debounced)
@@ -63,40 +50,21 @@ export const DashboardPage: React.FC = () => {
     const sp = new URLSearchParams(location.search);
     sp.set('type', type);
 
-    if (type === 'veo3') {
-      if (produto?.trim()) sp.set('produto', produto.trim());
-      else sp.delete('produto');
+    if (filters.tags.trim()) sp.set('tags', filters.tags.trim());
+    else sp.delete('tags');
 
-      if (dimensao?.trim()) sp.set('dimensao', dimensao.trim());
-      else sp.delete('dimensao');
-
-      if (tag?.trim()) sp.set('tag', tag.trim());
-      else sp.delete('tag');
-
-      sp.delete('q');
-      sp.delete('tags');
-      for (const key of Array.from(sp.keys())) {
-        if (key.startsWith('m_')) sp.delete(key);
-      }
-    } else {
-      if (filters.q.trim()) sp.set('q', filters.q.trim());
-      else sp.delete('q');
-
-      if (filters.tags.trim()) sp.set('tags', filters.tags.trim());
-      else sp.delete('tags');
-
-      for (const key of Array.from(sp.keys())) {
-        if (key.startsWith('m_')) sp.delete(key);
-      }
-      for (const [k, v] of Object.entries(filters.meta)) {
-        if (!v || !v.trim()) continue;
-        sp.set(`m_${k}`, v.trim());
-      }
-
-      sp.delete('produto');
-      sp.delete('dimensao');
-      sp.delete('tag');
+    for (const key of Array.from(sp.keys())) {
+      if (key.startsWith('m_')) sp.delete(key);
     }
+    for (const [k, v] of Object.entries(filters.meta)) {
+      if (!v || !v.trim()) continue;
+      sp.set(`m_${k}`, v.trim());
+    }
+
+    sp.delete('q');
+    sp.delete('produto');
+    sp.delete('dimensao');
+    sp.delete('tag');
 
     const next = `?${sp.toString()}`;
     if (next !== location.search) {
@@ -108,30 +76,19 @@ export const DashboardPage: React.FC = () => {
   }, [filters, type, location.pathname, location.search, navigate]);
 
   const tagsAny = useMemo(() => {
-    if (type === 'veo3') return null;
     if (!filters.tags.trim()) return null;
-    return filters.tags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .map((t) => t.toLowerCase().replace(/\s+/g, '-'));
-  }, [filters.tags, type]);
+    return [filters.tags.trim()];
+  }, [filters.tags]);
+
+  const { options } = useFilterOptions(type);
 
   // Fetch assets based on tag (or all if no tag)
   const { assets, loading: assetsLoading } = useAssets({
     type,
-    query: type === 'veo3' ? null : filters.q || null,
-    tagsAny: type === 'veo3' ? (tag ? [tag] : null) : tagsAny,
-    metaFilters:
-      type === 'veo3'
-        ? {
-            ...(produto ? { produto } : {}),
-            ...(dimensao ? { dimensao } : {}),
-          }
-        : filters.meta,
+    tagsAny,
+    metaFilters: filters.meta,
     limit: 60,
   });
-  const { produtos, dimensoes, tags } = useAssetFilterOptions(assets, type ?? '');
   const { folders, loading: foldersLoading } = useFolders(null);
 
   const loading = assetsLoading || foldersLoading;
@@ -243,28 +200,13 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
-                 {type === 'veo3' && (
-                   <FiltersBarMinimal
-                     title="VEO 3"
-                     produto={produto}
-                     dimensao={dimensao}
-                     tag={tag}
-                     produtos={produtos}
-                     dimensoes={dimensoes}
-                     tags={tags}
-                     onChange={({ produto: nextProduto, dimensao: nextDimensao, tag: nextTag }) => {
-                       setProduto(nextProduto ?? null);
-                       setDimensao(nextDimensao ?? null);
-                       setTag(nextTag ?? null);
-                     }}
-                   />
-                 )}
-                 {type && type !== 'veo3' && (
+                 {type && (
                    <FiltersBar
                      type={type}
                      value={filters}
+                     options={options}
                      onChange={setFilters}
-                     onClear={() => setFilters({ q: '', tags: '', meta: {} })}
+                     onClear={() => setFilters({ tags: '', meta: {} })}
                    />
                  )}
 
