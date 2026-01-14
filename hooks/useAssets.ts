@@ -23,7 +23,7 @@ type ListArgs = {
   query?: string | null;
   assetKind?: string | null; // legacy (if you used assets.type as "video"), keep for later if needed
   metaFilters?: Record<string, string | null | undefined>;
-  tagsAny?: string[] | null; // free tags[] filter (contains all provided)
+  tagsAny?: string[] | null; // free tags[] filter (ANY match)
   limit?: number;
 };
 
@@ -60,9 +60,10 @@ export function useAssets(args?: ListArgs) {
       if (a.type) {
         q = q.eq('type', a.type);
       }
-      // Free tags[] (all tags must be present)
+      // Free tags[] (ANY tag can match) — better UX for filters
       if (a.tagsAny && a.tagsAny.length) {
-        q = q.contains('tags', a.tagsAny);
+        // PostgREST operator: overlaps = any intersection
+        q = q.overlaps('tags', a.tagsAny);
       }
       if (a.query) {
         q = q.ilike('name', `%${a.query}%`);
@@ -71,7 +72,8 @@ export function useAssets(args?: ListArgs) {
       if (a.metaFilters) {
         for (const [k, v] of Object.entries(a.metaFilters)) {
           if (!v) continue;
-          q = q.filter(`meta->>${k}`, 'eq', v);
+          // case-insensitive match to avoid "Adele" vs "adele"
+          q = q.filter(`meta->>${k}`, 'ilike', `%${v}%`);
         }
       }
 
