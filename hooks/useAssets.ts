@@ -326,6 +326,16 @@ export function useAssets(args?: ListArgs) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, argsKey]);
 
+  // ✅ Global refresh when any asset changes (upload/create/delete)
+  useEffect(() => {
+    const handler = () => {
+      if (!organizationId) return;
+      list();
+    };
+    window.addEventListener('vah:assets_changed', handler as EventListener);
+    return () => window.removeEventListener('vah:assets_changed', handler as EventListener);
+  }, [organizationId, list]);
+
   const memo = useMemo(
     () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset }),
     [loading, error, assets, list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset]

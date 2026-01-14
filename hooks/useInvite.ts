@@ -38,9 +38,11 @@ export function useInvite() {
 
       setLoading(true);
       try {
+        const inviteId = crypto.randomUUID();
         const { data, error: insErr } = await supabase
           .from('invites')
           .insert({
+            id: inviteId,
             organization_id: organizationId,
             email,
             role,

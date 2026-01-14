@@ -122,6 +122,8 @@ export const NewAssetModal: React.FC<{
         });
       }
       onCreated?.();
+      // ✅ notify all pages to refresh lists immediately
+      window.dispatchEvent(new Event('vah:assets_changed'));
       onClose();
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao criar asset');
