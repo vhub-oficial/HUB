@@ -75,7 +75,11 @@ export function useAssets(args?: ListArgs) {
         q = q.overlaps('tags', a.tagsAny);
       }
       if (a.query) {
-        q = q.ilike('name', `%${a.query}%`);
+        const qq = a.query.trim();
+        const tagQ = qq.toLowerCase().replace(/\s+/g, '-');
+        // name OR tags contains tagQ
+        // (tags.cs.{x} = array contains x)
+        q = q.or(`name.ilike.%${qq}%,tags.cs.{${tagQ}}`);
       }
       // meta filters (exact match)
       if (a.metaFilters) {
@@ -111,7 +115,7 @@ export function useAssets(args?: ListArgs) {
 
   const uploadAsset = useCallback(async (
     file: File,
-    opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any }
+    opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any; displayName: string }
   ) => {
     if (!organizationId) throw new Error('organizationId ausente');
     if (!user?.id) throw new Error('não autenticado');
@@ -144,7 +148,7 @@ export function useAssets(args?: ListArgs) {
       .from('assets')
       .insert({
         id: assetId,
-        name: file.name,
+        name: opts.displayName || file.name,
         url: objectPath,
         type: categoryType,
         size_mb: sizeMb,

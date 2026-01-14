@@ -112,10 +112,12 @@ export const NewAssetModal: React.FC<{
         });
       } else {
         if (!file) return setErr('Selecione um arquivo para upload.');
+        if (!name.trim()) return setErr('Nome do asset é obrigatório.');
         await uploadAsset(file, {
           folderId,
           tags,
           categoryType: category,
+          displayName: name.trim(),
           meta: { ...meta, category, source: 'storage' },
         });
       }
@@ -316,31 +318,6 @@ export const NewAssetModal: React.FC<{
                   <div className="text-gray-400 text-sm mt-1">
                     (drag & drop)
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500">Escolher arquivo</label>
-                  <input
-                    type="file"
-                    className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-gray-200"
-                    disabled={!canCreate || busy}
-                    accept={
-                      category === 'provas-sociais'
-                        ? 'image/*'
-                        : (category === 'musicas' || category === 'sfx' || category === 'vozes')
-                          ? 'audio/*'
-                          : 'video/*'
-                    }
-                    onChange={(e) => {
-                      const selected = e.target.files?.[0] ?? null;
-                      setFile(selected);
-                    }}
-                  />
-                  {file && (
-                    <div className="text-xs text-gray-300 mt-2">
-                      Selecionado: <span className="text-white">{file.name}</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}

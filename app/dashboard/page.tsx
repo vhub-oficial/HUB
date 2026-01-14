@@ -17,6 +17,7 @@ export const DashboardPage: React.FC = () => {
   const typeRaw = searchParams.get('type');
   const type = typeRaw ? typeRaw.toLowerCase() : null;
   const q = searchParams.get('q') ?? '';
+  const isSearching = !type && !!q.trim();
   const { organizationId } = useAuth();
   
   // Read filters from URL (persistência)
@@ -74,11 +75,6 @@ export const DashboardPage: React.FC = () => {
       if (!v || !v.trim()) continue;
       sp.set(`m_${k}`, v.trim());
     }
-
-    sp.delete('q');
-    sp.delete('produto');
-    sp.delete('dimensao');
-    sp.delete('tag');
 
     const next = `?${sp.toString()}`;
     if (next !== location.search) {
@@ -158,7 +154,7 @@ export const DashboardPage: React.FC = () => {
     <div className="p-8 space-y-10 min-h-screen">
       
       {/* 1. HERO SECTION - Only show on Home (no type) */}
-      {!type && (
+      {!type && !isSearching && (
         <div className="relative w-full h-64 bg-black rounded-3xl border border-gold/20 flex flex-col items-center justify-center text-center overflow-hidden">
           <div className="absolute top-4 bg-gold/10 text-gold px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-gold/20">
             Hub Oficial
@@ -177,7 +173,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* 2. STATS GRID (Visão Geral) - Only show on Home */}
-      {!type && (
+      {!type && !isSearching && (
         <section>
             <div className="flex items-center gap-2 mb-6 border-l-4 border-gold pl-4">
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Visão Geral do Acervo</h2>
@@ -207,9 +203,11 @@ export const DashboardPage: React.FC = () => {
       <section>
          <div className="flex items-center justify-between mb-6 border-l-4 border-gold pl-4">
             <h2 className="text-sm font-bold text-gray-200 uppercase tracking-widest">
-                {type ? `Filtro: ${type.replace('-', ' ')}` : 'Últimos Adicionados'}
+              {type
+                ? `Filtro: ${type.replace('-', ' ')}`
+                : (isSearching ? `Resultados: "${q}"` : 'Últimos Adicionados')}
             </h2>
-         </div>
+          </div>
 
          {loading ? (
              <div className="flex justify-center py-20">
