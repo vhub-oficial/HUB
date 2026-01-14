@@ -293,20 +293,47 @@ export const NewAssetModal: React.FC<{
                 onChange={(e) => setUrl(e.target.value)}
               />
             ) : (
-              <div
-                {...getRootProps()}
-                className={[
-                  "rounded-xl border border-dashed p-5 text-center transition-colors",
-                  isDragActive ? "border-gold/50 bg-gold/5" : "border-border bg-black/20",
-                  (!canCreate || busy) ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-gold/40"
-                ].join(' ')}
-              >
-                <input {...getInputProps()} />
-                <div className="text-white font-medium">
-                  {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte um arquivo aqui')}
+              <div className="space-y-3">
+                <div
+                  {...getRootProps()}
+                  className={[
+                    "rounded-xl border border-dashed p-5 text-center transition-colors",
+                    isDragActive ? "border-gold/50 bg-gold/5" : "border-border bg-black/20",
+                    (!canCreate || busy) ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-gold/40"
+                  ].join(' ')}
+                >
+                  <input {...getInputProps()} />
+                  <div className="text-white font-medium">
+                    {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte aqui')}
+                  </div>
+                  <div className="text-gray-400 text-sm mt-1">
+                    (drag & drop)
+                  </div>
                 </div>
-                <div className="text-gray-400 text-sm mt-1">
-                  ou clique para escolher um arquivo
+
+                <div>
+                  <label className="text-xs text-gray-500">Escolher arquivo</label>
+                  <input
+                    type="file"
+                    className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-gray-200"
+                    disabled={!canCreate || busy}
+                    accept={
+                      category === 'provas-sociais'
+                        ? 'image/*'
+                        : (category === 'musicas' || category === 'sfx' || category === 'vozes')
+                          ? 'audio/*'
+                          : 'video/*'
+                    }
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0] ?? null;
+                      setFile(selected);
+                    }}
+                  />
+                  {file && (
+                    <div className="text-xs text-gray-300 mt-2">
+                      Selecionado: <span className="text-white">{file.name}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
