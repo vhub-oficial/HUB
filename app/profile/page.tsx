@@ -6,6 +6,9 @@ import { Button } from '../../components/UI/Button';
 export const ProfilePage: React.FC = () => {
   const { profile, user, signOut } = useAuth();
   const [orgName, setOrgName] = React.useState<string | null>(null);
+  const [name, setName] = React.useState(profile?.name ?? '');
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -22,6 +25,19 @@ export const ProfilePage: React.FC = () => {
     return () => { mounted = false; };
   }, [profile?.organization_id]);
 
+  const save = async () => {
+    if (!user?.id) return;
+    setBusy(true);
+    setMsg(null);
+    const { error } = await supabase.from('users').update({ name }).eq('id', user.id);
+    setBusy(false);
+    if (error) setMsg(error.message);
+    else {
+      setMsg('Nome atualizado!');
+      setTimeout(() => window.location.reload(), 400);
+    }
+  };
+
   return (
     <div className="p-6 max-w-3xl space-y-6">
       <div>
@@ -33,7 +49,11 @@ export const ProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <div className="text-xs text-gray-500">Nome</div>
-            <div className="text-white font-semibold mt-1">{profile?.name ?? '—'}</div>
+            <input
+              className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <div>
             <div className="text-xs text-gray-500">E-mail</div>
@@ -49,10 +69,14 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex gap-3 items-center">
+          <Button onClick={save} disabled={busy}>
+            {busy ? 'Salvando...' : 'Salvar'}
+          </Button>
           <Button onClick={() => signOut()} variant="secondary">
             Sair da conta
           </Button>
+          {msg && <span className="text-sm text-gray-400">{msg}</span>}
         </div>
       </div>
     </div>
