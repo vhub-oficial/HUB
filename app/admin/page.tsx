@@ -104,7 +104,7 @@ export const AdminPage: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Admin</h1>
         <p className="text-gray-400 mt-1">
-          Organização: <span className="text-white/90">{organizationId ?? '—'}</span>
+          Organização: <span className="text-white/90">{org?.name ?? '—'}</span>
         </p>
       </div>
 
