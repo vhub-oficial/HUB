@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/UI/Button';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { normalizeJoinCodeError } from '../../lib/errorMessages';
 
 /**
  * Shown when the auth user exists but there is no matching row in public.users yet.
@@ -32,8 +33,7 @@ export const PendingAccessPage: React.FC = () => {
       // reload to force AuthContext to refetch profile reliably
       setTimeout(() => window.location.assign('/#/dashboard'), 600);
     } catch (e: any) {
-      const msg = e?.message ?? 'Erro ao entrar com o código';
-      setErr(msg.includes('code_not_found') ? 'Código não encontrado.' : msg);
+      setErr(normalizeJoinCodeError(e));
     } finally {
       setBusy(false);
     }
