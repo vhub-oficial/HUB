@@ -3,6 +3,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { Button } from '../../../components/UI/Button';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
+import { normalizeAuthError } from '../../../lib/errorMessages';
 
 export const LoginPage: React.FC = () => {
   const { signIn, signUp, user, profile } = useAuth();
@@ -42,7 +43,7 @@ export const LoginPage: React.FC = () => {
       // No explicit navigate here; reliance on useEffect above ensures 
       // we only redirect when state is fully propagated.
     } catch (err: any) {
-      setError(err.message || "Ocorreu um erro durante a autenticação.");
+      setError(normalizeAuthError(err));
     } finally {
       setLocalLoading(false);
     }
