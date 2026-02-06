@@ -6,7 +6,7 @@ import { AlertCircle } from 'lucide-react';
 import { normalizeAuthError } from '../../../lib/errorMessages';
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signUp, user, profile } = useAuth();
+  const { signIn, signUp, user, profile, needsProvisioning } = useAuth();
   const navigate = useNavigate();
   
   const [isRegistering, setIsRegistering] = useState(false);
@@ -16,10 +16,19 @@ export const LoginPage: React.FC = () => {
 
   // Auto-redirect if logged in
   useEffect(() => {
-    if (user && profile) {
-        navigate('/dashboard');
+    if (!user) return;
+
+    // Se logou mas ainda não tem linha em public.users → vai pro fluxo do join_code
+    if (needsProvisioning) {
+      navigate('/pending');
+      return;
     }
-  }, [user, profile, navigate]);
+
+    // Se já tem perfil → dashboard
+    if (profile) {
+      navigate('/dashboard');
+    }
+  }, [user, profile, needsProvisioning, navigate]);
 
   // Form State
   const [name, setName] = useState('');
