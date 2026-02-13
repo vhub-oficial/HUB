@@ -26,7 +26,7 @@ export const AdminPage: React.FC = () => {
         const [{ data: orgData }, { data: usageData }, { data: usersData }] = await Promise.all([
           supabase.from('organizations').select('id,name,plan,storage_limit_gb,join_code').eq('id', organizationId).single(),
           supabase.from('storage_usage').select('used_space_gb,last_updated').eq('organization_id', organizationId).single(),
-          supabase.from('users').select('id,email,name,role,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
+          supabase.from('users').select('id,email,name,role,disabled,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
         ]);
         if (!mounted) return;
         setOrg(orgData ?? null);
@@ -85,11 +85,11 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const removeUserFromOrg = async (userId: string) => {
+  const disableUser = async (userId: string) => {
     if (!organizationId) return;
     if (userId === user?.id) return;
 
-    const ok = window.confirm('Remover este usuário da sua organização? Ele perderá o acesso imediatamente.');
+    const ok = window.confirm('Bloquear este usuário? Ele não conseguirá mais acessar a organização.');
     if (!ok) return;
 
     try {
@@ -97,19 +97,16 @@ export const AdminPage: React.FC = () => {
 
       const { error } = await supabase
         .from('users')
-        .update({
-          organization_id: null,
-          role: 'disabled',
-        })
+        .update({ disabled: true })
         .eq('id', userId)
         .eq('organization_id', organizationId);
 
       if (error) throw error;
 
-      setUsers((prev) => prev.filter((x) => x.id !== userId));
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, disabled: true } : u)));
     } catch (e: any) {
       console.error(e);
-      alert(e?.message ?? 'Falha ao remover usuário');
+      alert(e?.message ?? 'Falha ao bloquear usuário');
     } finally {
       setBusy(false);
     }
@@ -236,13 +233,18 @@ export const AdminPage: React.FC = () => {
                       </select>
                     </td>
                     <td className="p-3 text-right">
+                      {u.disabled && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-red-500/10 border border-red-500/30 text-red-300 mr-2">
+                          Bloqueado
+                        </span>
+                      )}
                       <button
                         className="px-3 py-2 rounded-lg border border-border bg-black/40 text-red-300 hover:text-red-200 hover:border-red-400 disabled:opacity-50"
-                        disabled={busy || u.id === user?.id}
-                        onClick={() => removeUserFromOrg(u.id)}
-                        title={u.id === user?.id ? 'Você não pode remover sua própria conta' : 'Remover usuário da organização'}
+                        disabled={busy || u.id === user?.id || u.disabled}
+                        onClick={() => disableUser(u.id)}
+                        title={u.id === user?.id ? 'Você não pode bloquear sua própria conta' : (u.disabled ? 'Usuário já bloqueado' : 'Bloquear acesso do usuário')}
                       >
-                        Remover
+                        Bloquear
                       </button>
                     </td>
                   </tr>

@@ -80,12 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const profile = (data as UserProfile | null) ?? null;
 
-      if (profile?.role === 'disabled') {
+      if (profile?.disabled === true) {
         await supabase.auth.signOut();
+        setSession(null);
         setProfile(null);
         setNeedsProvisioning(false);
-        setIsBlocked(false);
-        setAuthError('Sua conta foi removida/desativada.');
+        setIsBlocked(true);
+        setAuthError('Seu acesso foi bloqueado pelo administrador desta organização.');
         return null;
       }
 
