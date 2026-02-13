@@ -73,6 +73,9 @@ export function useAssets(args?: AssetsArgs) {
       if (a.type) {
         q = q.eq('type', a.type);
       }
+      if (a.folderId) {
+        q = q.eq('folder_id', a.folderId);
+      }
       // Free tags[] (ANY tag can match) — better UX for filters
       if (a.tagsAny && a.tagsAny.length) {
         // PostgREST operator: overlaps = any intersection
