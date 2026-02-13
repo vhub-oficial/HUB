@@ -6,7 +6,7 @@ import { AlertCircle } from 'lucide-react';
 import { normalizeAuthError } from '../../../lib/errorMessages';
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signUp, user, profile, needsProvisioning } = useAuth();
+  const { signIn, signUp, user, profile, needsProvisioning, authError } = useAuth();
   const navigate = useNavigate();
   
   const [isRegistering, setIsRegistering] = useState(false);
@@ -29,6 +29,13 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard');
     }
   }, [user, profile, needsProvisioning, navigate]);
+
+
+  useEffect(() => {
+    if (!authError) return;
+    setError(authError);
+    setInfo(null);
+  }, [authError]);
 
   // Form State
   const [name, setName] = useState('');

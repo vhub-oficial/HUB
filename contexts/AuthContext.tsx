@@ -10,6 +10,7 @@ interface AuthContextType {
   role: Role | null;
   loading: boolean;
   isBlocked: boolean;
+  authError: string | null;
   /**
    * True when the auth user exists but there is no matching row in public.users yet.
    * This usually means the user still needs to be invited / provisioned in the tenant.
@@ -30,13 +31,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [needsProvisioning, setNeedsProvisioning] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
-      else setLoading(false);
+      else {
+        setAuthError(null);
+        setLoading(false);
+      }
     });
 
     // 2. Listen for changes
@@ -53,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setNeedsProvisioning(false);
         setIsBlocked(false);
+        setAuthError(null);
         setLoading(false);
       }
     });
@@ -73,6 +79,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       const profile = (data as UserProfile | null) ?? null;
+
+      if (profile?.role === 'disabled') {
+        await supabase.auth.signOut();
+        setProfile(null);
+        setNeedsProvisioning(false);
+        setIsBlocked(false);
+        setAuthError('Sua conta foi removida/desativada.');
+        return null;
+      }
+
+      setAuthError(null);
       setProfile(profile ?? null);
       setNeedsProvisioning(!profile);
       setIsBlocked(profile?.is_active === false);
@@ -83,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(null);
       setNeedsProvisioning(true);
       setIsBlocked(false);
+      setAuthError('Não foi possível carregar seu perfil.');
       return null;
     } finally {
       setLoading(false);
@@ -124,6 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
     setSession(null);
     setIsBlocked(false);
+    setAuthError(null);
   };
 
   const hasRole = (required: Role) => {
@@ -143,13 +162,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       isBlocked,
       needsProvisioning,
+      authError,
       hasRole,
       signIn,
       signUp,
       signOut,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, profile, loading, isBlocked, needsProvisioning]
+    [session, profile, loading, isBlocked, needsProvisioning, authError]
   );
 
   return (

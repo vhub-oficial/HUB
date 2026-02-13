@@ -89,7 +89,7 @@ export const AdminPage: React.FC = () => {
     if (!organizationId) return;
     if (userId === user?.id) return;
 
-    const ok = window.confirm('Remover este usuário da sua organização? Ele perderá o acesso e voltará para "Acesso pendente".');
+    const ok = window.confirm('Remover este usuário da sua organização? Ele perderá o acesso imediatamente.');
     if (!ok) return;
 
     try {
@@ -97,7 +97,10 @@ export const AdminPage: React.FC = () => {
 
       const { error } = await supabase
         .from('users')
-        .update({ organization_id: null, role: 'viewer', is_active: false })
+        .update({
+          organization_id: null,
+          role: 'disabled',
+        })
         .eq('id', userId)
         .eq('organization_id', organizationId);
 
