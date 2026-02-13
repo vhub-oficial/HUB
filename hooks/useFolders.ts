@@ -164,7 +164,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
       const { data, error: e } = await supabase
         .from('folders')
         .insert(payload)
-        .select('*')
+        .select('id,name,category_type,parent_id,organization_id,created_by,created_at')
         .single();
 
       if (e) throw e;
@@ -175,6 +175,42 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     [organizationId, user?.id],
   );
 
+
+  const renameFolder = useCallback(async (folderId: string, nextName: string) => {
+    const name = nextName.trim();
+    if (!name) throw new Error('Nome inválido.');
+
+    const { data, error } = await supabase
+      .from('folders')
+      .update({ name })
+      .eq('id', folderId)
+      .select('id,name,category_type,parent_id,organization_id,created_by,created_at')
+      .single();
+
+    if (error) throw error;
+
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? (data as any) : f)));
+    return data;
+  }, [supabase]);
+
+  const deleteFolder = useCallback(async (folderId: string) => {
+    const { error: detachErr } = await supabase
+      .from('assets')
+      .update({ folder_id: null })
+      .eq('folder_id', folderId);
+
+    if (detachErr) throw detachErr;
+
+    const { error: delErr } = await supabase
+      .from('folders')
+      .delete()
+      .eq('id', folderId);
+
+    if (delErr) throw delErr;
+
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+  }, [supabase]);
+
   return useMemo(() => ({
     folders,
     loading,
@@ -182,8 +218,10 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     reload: load,
     refresh: load,
     createFolder,
+    renameFolder,
+    deleteFolder,
     supportsCategoryType,
     getFolderById,
     getBreadcrumb,
-  }), [createFolder, error, folders, getBreadcrumb, getFolderById, load, loading, supportsCategoryType]);
+  }), [createFolder, deleteFolder, error, folders, getBreadcrumb, getFolderById, load, loading, renameFolder, supportsCategoryType]);
 }
