@@ -329,13 +329,21 @@ export function useAssets(args?: AssetsArgs) {
 
   const moveAssetToFolder = useCallback(async (assetId: string, folderId: string | null) => {
     if (!organizationId) throw new Error('Sem organização');
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('assets')
       .update({ folder_id: folderId })
       .eq('id', assetId)
-      .eq('organization_id', organizationId);
+      .eq('organization_id', organizationId)
+      .select('id,folder_id')
+      .single();
 
     if (error) throw error;
+
+    setAssets((prev) =>
+      prev.map((a) => (a.id === assetId ? { ...a, folder_id: data.folder_id } : a))
+    );
+
+    return data;
   }, [organizationId]);
 
   useEffect(() => {
