@@ -7,6 +7,7 @@ export interface UserProfile {
   organization_id: string;
   role: Role;
   avatar_url?: string;
+  is_active?: boolean;
 }
 
 export interface Folder {

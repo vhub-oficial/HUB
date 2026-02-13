@@ -9,6 +9,7 @@ interface AuthContextType {
   organizationId: string | null;
   role: Role | null;
   loading: boolean;
+  isBlocked: boolean;
   /**
    * True when the auth user exists but there is no matching row in public.users yet.
    * This usually means the user still needs to be invited / provisioned in the tenant.
@@ -28,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsProvisioning, setNeedsProvisioning] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   useEffect(() => {
     // 1. Get initial session
@@ -50,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setProfile(null);
         setNeedsProvisioning(false);
+        setIsBlocked(false);
         setLoading(false);
       }
     });
@@ -72,12 +75,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const profile = (data as UserProfile | null) ?? null;
       setProfile(profile ?? null);
       setNeedsProvisioning(!profile);
+      setIsBlocked(profile?.is_active === false);
 
       return profile;
     } catch (err) {
       console.error("Error fetching profile:", err);
       setProfile(null);
       setNeedsProvisioning(true);
+      setIsBlocked(false);
       return null;
     } finally {
       setLoading(false);
@@ -118,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
     setProfile(null);
     setSession(null);
+    setIsBlocked(false);
   };
 
   const hasRole = (required: Role) => {
@@ -135,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       organizationId: profile?.organization_id ?? null,
       role: profile?.role ?? null,
       loading,
+      isBlocked,
       needsProvisioning,
       hasRole,
       signIn,
@@ -142,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signOut,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, profile, loading, needsProvisioning]
+    [session, profile, loading, isBlocked, needsProvisioning]
   );
 
   return (
