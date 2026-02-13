@@ -85,28 +85,29 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const disableUser = async (userId: string) => {
+  const setUserDisabled = async (userId: string, nextDisabled: boolean) => {
     if (!organizationId) return;
-    if (userId === user?.id) return;
 
-    const ok = window.confirm('Bloquear este usuário? Ele não conseguirá mais acessar a organização.');
-    if (!ok) return;
+    const msg = nextDisabled
+      ? 'Bloquear este usuário? Ele não conseguirá mais acessar a organização.'
+      : 'Reativar este usuário? Ele voltará a ter acesso conforme a role atual.';
+    if (!window.confirm(msg)) return;
 
+    setBusy(true);
     try {
-      setBusy(true);
-
       const { error } = await supabase
         .from('users')
-        .update({ disabled: true })
+        .update({ disabled: nextDisabled })
         .eq('id', userId)
         .eq('organization_id', organizationId);
 
       if (error) throw error;
 
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, disabled: true } : u)));
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, disabled: nextDisabled } : u))
+      );
     } catch (e: any) {
-      console.error(e);
-      alert(e?.message ?? 'Falha ao bloquear usuário');
+      alert(e?.message ?? 'Falha ao atualizar acesso do usuário');
     } finally {
       setBusy(false);
     }
@@ -233,19 +234,16 @@ export const AdminPage: React.FC = () => {
                       </select>
                     </td>
                     <td className="p-3 text-right">
-                      {u.disabled && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-red-500/10 border border-red-500/30 text-red-300 mr-2">
-                          Bloqueado
-                        </span>
-                      )}
                       <button
-                        className="px-3 py-2 rounded-lg border border-border bg-black/40 text-red-300 hover:text-red-200 hover:border-red-400 disabled:opacity-50"
-                        disabled={busy || u.id === user?.id || u.disabled}
-                        onClick={() => disableUser(u.id)}
-                        title={u.id === user?.id ? 'Você não pode bloquear sua própria conta' : (u.disabled ? 'Usuário já bloqueado' : 'Bloquear acesso do usuário')}
+                        className={`px-3 py-2 rounded-lg border ${
+                          u.disabled ? 'border-yellow-500 text-yellow-300' : 'border-red-500 text-red-300'
+                        }`}
+                        disabled={busy}
+                        onClick={() => setUserDisabled(u.id, !u.disabled)}
                       >
-                        Bloquear
+                        {u.disabled ? 'Reativar' : 'Bloquear'}
                       </button>
+                      {u.disabled && <span className="ml-2 text-xs text-yellow-300">Bloqueado</span>}
                     </td>
                   </tr>
                 ))}
