@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 const roles = ['viewer', 'editor', 'admin'] as const;
 
 export const AdminPage: React.FC = () => {
-  const { organizationId } = useAuth();
+  const { organizationId, user } = useAuth();
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [org, setOrg] = useState<any>(null);
@@ -80,6 +80,33 @@ export const AdminPage: React.FC = () => {
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: nextRole } : u)));
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao atualizar role');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeUserFromOrg = async (userId: string) => {
+    if (!organizationId) return;
+    if (userId === user?.id) return;
+
+    const ok = window.confirm('Remover este usuário da sua organização? Ele perderá o acesso e voltará para "Acesso pendente".');
+    if (!ok) return;
+
+    try {
+      setBusy(true);
+
+      const { error } = await supabase
+        .from('users')
+        .update({ organization_id: null, role: 'viewer' })
+        .eq('id', userId)
+        .eq('organization_id', organizationId);
+
+      if (error) throw error;
+
+      setUsers((prev) => prev.filter((x) => x.id !== userId));
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message ?? 'Falha ao remover usuário');
     } finally {
       setBusy(false);
     }
@@ -185,6 +212,7 @@ export const AdminPage: React.FC = () => {
                   <th className="text-left p-3">Usuário</th>
                   <th className="text-left p-3">E-mail</th>
                   <th className="text-left p-3">Role</th>
+                  <th className="text-right p-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,11 +232,21 @@ export const AdminPage: React.FC = () => {
                         ))}
                       </select>
                     </td>
+                    <td className="p-3 text-right">
+                      <button
+                        className="px-3 py-2 rounded-lg border border-border bg-black/40 text-red-300 hover:text-red-200 hover:border-red-400 disabled:opacity-50"
+                        disabled={busy || u.id === user?.id}
+                        onClick={() => removeUserFromOrg(u.id)}
+                        title={u.id === user?.id ? 'Você não pode remover sua própria conta' : 'Remover usuário da organização'}
+                      >
+                        Remover
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {users.length === 0 && (
                   <tr className="border-t border-border">
-                    <td className="p-3 text-gray-500" colSpan={3}>Nenhum usuário encontrado.</td>
+                    <td className="p-3 text-gray-500" colSpan={4}>Nenhum usuário encontrado.</td>
                   </tr>
                 )}
               </tbody>
