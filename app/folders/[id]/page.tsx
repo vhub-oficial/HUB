@@ -1,23 +1,53 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useFolders } from '../../../hooks/useFolders';
 import { useAssets } from '../../../hooks/useAssets';
 import { FolderCard } from '../../../components/Folders/FolderCard';
 import { Breadcrumb } from '../../../components/Folders/Breadcrumb';
 import { AssetGrid } from '../../../components/Assets/AssetGrid';
 import { NewAssetModal } from '../../../components/Assets/NewAssetModal';
+import { NewFolderModal } from '../../../components/Folders/NewFolderModal';
 
 export const FolderPage: React.FC = () => {
   const { id } = useParams();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const typeRaw = searchParams.get('type');
+  const type = typeRaw ? typeRaw.toLowerCase() : null;
+  const q = searchParams.get('q') ?? '';
+  const tags = searchParams.get('tags') ?? '';
+  const tagsAny = tags.trim() ? [tags.trim()] : null;
+
+  const filters = useMemo(() => {
+    const meta: Record<string, string> = {};
+    for (const [k, v] of searchParams.entries()) {
+      if (!k.startsWith('m_')) continue;
+      meta[k.slice(2)] = v;
+    }
+    return { meta };
+  }, [location.search]);
+
   const folderId = id === 'root' ? null : (id ?? null);
 
-  const { folders, loading: foldersLoading, error: foldersError, getBreadcrumb } = useFolders(folderId);
+  const {
+    folders: subfolders,
+    loading: foldersLoading,
+    error: foldersError,
+    createFolder,
+    getBreadcrumb,
+  } = useFolders({ parentId: folderId, type: type ?? null });
+
   const { assets, loading: assetsLoading, error: assetsError, refresh } = useAssets({
-    folderId: folderId, // null => root assets
+    type: type ?? null,
+    folderId: id,
+    tagsAny,
+    metaFilters: filters.meta,
+    query: q ? q : null,
     limit: 60,
   });
-  const [openNew, setOpenNew] = useState(false);
 
+  const [openNew, setOpenNew] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const [breadcrumb, setBreadcrumb] = useState<any[]>([]);
 
   useEffect(() => {
@@ -30,7 +60,9 @@ export const FolderPage: React.FC = () => {
         setBreadcrumb([]);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [folderId, getBreadcrumb]);
 
   const title = useMemo(() => {
@@ -57,13 +89,21 @@ export const FolderPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
           <div className="bg-surface border border-border rounded-xl p-6">
-            <h3 className="text-white font-semibold">Subpastas</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold">Subpastas</h3>
+              <button
+                className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60 text-sm"
+                onClick={() => setNewOpen(true)}
+              >
+                + Nova subpasta
+              </button>
+            </div>
             <div className="mt-4 space-y-3">
               {foldersLoading && <div className="text-gray-400 text-sm">Carregando...</div>}
-              {!foldersLoading && folders.length === 0 && (
+              {!foldersLoading && subfolders.length === 0 && (
                 <div className="text-gray-400 text-sm">Nenhuma subpasta.</div>
               )}
-              {folders.map((f) => (
+              {subfolders.map((f) => (
                 <FolderCard key={f.id} folder={f} />
               ))}
             </div>
@@ -91,8 +131,15 @@ export const FolderPage: React.FC = () => {
       <NewAssetModal
         open={openNew}
         onClose={() => setOpenNew(false)}
-        initialCategory={null}
+        initialCategory={type}
         onCreated={() => refresh()}
+      />
+
+      <NewFolderModal
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        onCreate={(name) => createFolder(name, { parentId: id, type: type ?? null }).then(() => undefined)}
+        title="Nova subpasta"
       />
     </div>
   );
