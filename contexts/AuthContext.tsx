@@ -57,36 +57,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       // Fetch from 'users' table (RLS protected)
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        // If the row doesn't exist yet, we should NOT fabricate org/role.
-        // This keeps multi-tenant security intact and avoids "random org" bugs.
-        console.warn('Profile not found or inaccessible:', error.message || error);
-        setProfile(null);
-        setNeedsProvisioning(true);
-        return;
-      }
+      // maybeSingle: se 0 rows → data = null e error = null (caminho esperado)
+      if (error) throw error;
 
-      if (!data) {
-        setProfile(null);
-        setNeedsProvisioning(true);
-        return;
-      }
+      const profile = (data as UserProfile | null) ?? null;
+      setProfile(profile ?? null);
+      setNeedsProvisioning(!profile);
 
-      setProfile(data as UserProfile);
-      setNeedsProvisioning(false);
+      return profile;
     } catch (err) {
       console.error("Error fetching profile:", err);
       setProfile(null);
       setNeedsProvisioning(true);
+      return null;
     } finally {
       setLoading(false);
     }
