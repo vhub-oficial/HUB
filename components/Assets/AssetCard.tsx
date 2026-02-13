@@ -9,6 +9,7 @@ import { useAssets } from '../../hooks/useAssets';
 type Props = {
   asset: AssetRow;
   onDeleted?: () => void;
+  onDragStart?: (e: React.DragEvent, assetId: string) => void;
 };
 
 const isExternal = (asset: AssetRow) => {
@@ -49,7 +50,7 @@ const buildDownloadName = (asset: AssetRow) => {
   return `${base}${ext}`;
 };
 
-export const AssetCard: React.FC<Props> = ({ asset, onDeleted }) => {
+export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
@@ -112,6 +113,8 @@ export const AssetCard: React.FC<Props> = ({ asset, onDeleted }) => {
 
   return (
     <button
+      draggable
+      onDragStart={(e) => onDragStart?.(e, asset.id)}
       onClick={() => navigate(`/assets/${asset.id}`)}
       className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative"
     >

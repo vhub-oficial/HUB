@@ -91,18 +91,20 @@ export const DashboardPage: React.FC = () => {
   }, [filters.tags]);
 
   const { options } = useFilterOptions(type);
+  const [folderSort, setFolderSort] = useState<'recent'|'name'|'activity'>('recent');
 
   const assetsArgs = useMemo(() => ({
     type,
     tagsAny,
     metaFilters: filters.meta,
     query: q ? q : null,
-    limit: 60,
+    limit: 120,
+    onlyUnfoldered: true,
   }), [type, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
-  const { assets, loading: assetsLoading, refresh } = useAssets(assetsArgs);
-  const { folders, createFolder } = useFolders({ parentId: null, type: type ?? null });
+  const { assets: looseAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
+  const { folders, createFolder } = useFolders({ parentId: null, type: type ?? null, sort: folderSort });
   const [newFolderOpen, setNewFolderOpen] = useState(false);
 
   const foldersFiltered = useMemo(() => {
@@ -110,6 +112,29 @@ export const DashboardPage: React.FC = () => {
     if (!qq) return folders;
     return folders.filter((f) => f.name.toLowerCase().includes(qq));
   }, [folders, q]);
+
+  const onDragStartAsset = (e: React.DragEvent, assetId: string) => {
+    e.dataTransfer.setData('text/vhub-asset-id', assetId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDropOnFolder = async (e: React.DragEvent, folderId: string) => {
+    e.preventDefault();
+    const assetId = e.dataTransfer.getData('text/vhub-asset-id');
+    if (!assetId) return;
+
+    try {
+      await moveAssetToFolder(assetId, folderId);
+      refresh();
+    } catch (err: any) {
+      alert(err?.message ?? 'Falha ao mover asset para a pasta');
+    }
+  };
+
+  const onDragOverFolder = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
 
   const loading = assetsLoading;
 
@@ -234,18 +259,31 @@ export const DashboardPage: React.FC = () => {
 
                  <div className="flex items-center justify-between mt-6">
                    <div className="text-white font-semibold">Pastas</div>
-                   <button
-                     className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60"
-                     onClick={() => setNewFolderOpen(true)}
-                   >
-                     + Nova pasta
-                   </button>
+                   <div className="flex items-center gap-2">
+                     <select
+                       className="bg-black/40 border border-border rounded-xl px-3 py-2 text-white"
+                       value={folderSort}
+                       onChange={(e) => setFolderSort(e.target.value as any)}
+                     >
+                       <option value="recent">Recentes</option>
+                       <option value="name">Nome A–Z</option>
+                       <option value="activity">Última atividade</option>
+                     </select>
+                     <button
+                       className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60"
+                       onClick={() => setNewFolderOpen(true)}
+                     >
+                       + Nova pasta
+                     </button>
+                   </div>
                  </div>
 
                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                    {foldersFiltered.map((f) => (
                      <button
                        key={f.id}
+                       onDragOver={onDragOverFolder}
+                       onDrop={(e) => onDropOnFolder(e, f.id)}
                        className="text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30"
                        onClick={() => navigate(`/folders/${f.id}${type ? `?type=${type}` : ''}`)}
                      >
@@ -260,8 +298,8 @@ export const DashboardPage: React.FC = () => {
 
                  {/* Asset Grid */}
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {assets.length > 0 ? (
-                        assets.map(asset => <AssetCard key={asset.id} asset={asset} onDeleted={refresh} />)
+                    {looseAssets.length > 0 ? (
+                        looseAssets.map(asset => <AssetCard key={asset.id} asset={asset} onDeleted={refresh} onDragStart={onDragStartAsset} />)
                     ) : (
                         <div className="col-span-full py-16 text-center border border-dashed border-[#222] rounded-xl">
                             <p className="text-gray-500">Nenhum ativo encontrado nesta seção.</p>
