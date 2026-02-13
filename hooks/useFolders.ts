@@ -150,17 +150,16 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
 
       const clean = name.trim();
       if (!clean) throw new Error('Nome inválido');
+      const categoryType = opts?.type ?? null;
+      if (!categoryType) throw new Error('Selecione uma categoria antes de criar uma pasta.');
 
       const payload: any = {
         name: clean,
         organization_id: organizationId,
         parent_id: opts?.parentId ?? null,
         created_by: user.id,
+        category_type: categoryType,
       };
-
-      if (supportsCategoryType && opts?.type) {
-        payload.category_type = opts.type;
-      }
 
       const { data, error: e } = await supabase
         .from('folders')
@@ -173,7 +172,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
       setFolders((prev) => [data as FolderRow, ...prev]);
       return data as FolderRow;
     },
-    [organizationId, supportsCategoryType, user?.id],
+    [organizationId, user?.id],
   );
 
   return useMemo(() => ({
