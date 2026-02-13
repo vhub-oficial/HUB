@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
+import { NewFolderModal } from '../../components/Folders/NewFolderModal';
 import { AssetCard } from '../../components/Assets/AssetCard';
-import { FolderCard } from '../../components/Folders/FolderCard';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -102,9 +102,16 @@ export const DashboardPage: React.FC = () => {
 
   // Fetch assets based on tag (or all if no tag)
   const { assets, loading: assetsLoading, refresh } = useAssets(assetsArgs);
-  const { folders, loading: foldersLoading } = useFolders(null);
+  const { folders, createFolder } = useFolders({ parentId: null, type: type ?? null });
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
 
-  const loading = assetsLoading || foldersLoading;
+  const foldersFiltered = useMemo(() => {
+    const qq = (q ?? '').trim().toLowerCase();
+    if (!qq) return folders;
+    return folders.filter((f) => f.name.toLowerCase().includes(qq));
+  }, [folders, q]);
+
+  const loading = assetsLoading;
 
   // Stats State
   const [stats, setStats] = useState([
@@ -225,12 +232,31 @@ export const DashboardPage: React.FC = () => {
                    />
                  )}
 
-                 {/* Show Folders if strictly filtering or on home (logic per requirements) */}
-                 {folders.length > 0 && !type && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
-                        {folders.map(folder => <FolderCard key={folder.id} folder={folder} />)}
-                    </div>
-                 )}
+                 <div className="flex items-center justify-between mt-6">
+                   <div className="text-white font-semibold">Pastas</div>
+                   <button
+                     className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60"
+                     onClick={() => setNewFolderOpen(true)}
+                   >
+                     + Nova pasta
+                   </button>
+                 </div>
+
+                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {foldersFiltered.map((f) => (
+                     <button
+                       key={f.id}
+                       className="text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30"
+                       onClick={() => navigate(`/folders/${f.id}${type ? `?type=${type}` : ''}`)}
+                     >
+                       <div className="text-white font-semibold">{f.name}</div>
+                       <div className="text-gray-400 text-sm mt-1">Abrir</div>
+                     </button>
+                   ))}
+                   {foldersFiltered.length === 0 && (
+                     <div className="text-gray-500 text-sm">Nenhuma pasta encontrada.</div>
+                   )}
+                 </div>
 
                  {/* Asset Grid */}
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -245,6 +271,14 @@ export const DashboardPage: React.FC = () => {
              </div>
          )}
       </section>
+
+
+      <NewFolderModal
+        open={newFolderOpen}
+        onClose={() => setNewFolderOpen(false)}
+        onCreate={(name) => createFolder(name, { parentId: null, type: type ?? null }).then(() => undefined)}
+        title={type ? `Nova pasta em ${type.toUpperCase()}` : 'Nova pasta'}
+      />
 
     </div>
   );

@@ -21,11 +21,17 @@ export const Topbar: React.FC = () => {
   }, [location.search]);
 
   const applySearch = (next: string) => {
-    // Always route search to dashboard; keep type if present
-    const sp3 = new URLSearchParams();
-    if (type) sp3.set('type', type);
-    if (next.trim()) sp3.set('q', next.trim());
-    navigate({ pathname: '/dashboard', search: `?${sp3.toString()}` }, { replace: true });
+    const params = new URLSearchParams(location.search);
+
+    if (next.trim()) params.set('q', next.trim());
+    else params.delete('q');
+
+    if (type) params.set('type', type);
+
+    const isFolder = location.pathname.startsWith('/folders/');
+    const base = isFolder ? location.pathname : '/dashboard';
+
+    navigate({ pathname: base, search: `?${params.toString()}` }, { replace: true });
   };
 
   return (

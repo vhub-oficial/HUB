@@ -17,17 +17,17 @@ export type AssetRow = {
   meta?: any | null;
 };
 
-type ListArgs = {
+type AssetsArgs = {
   folderId?: string | null; // null => root assets (folder_id is null). undefined => don't filter by folder
   type?: string | null; // category/aba
   query?: string | null;
   assetKind?: string | null; // legacy (if you used assets.type as "video"), keep for later if needed
-  metaFilters?: Record<string, string | null | undefined>;
+  metaFilters?: Record<string, string> | null;
   tagsAny?: string[] | null; // free tags[] filter (ANY match)
   limit?: number;
 };
 
-export function useAssets(args?: ListArgs) {
+export function useAssets(args?: AssetsArgs) {
   const { organizationId, user, role } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function useAssets(args?: ListArgs) {
     }
   }, [args]);
 
-  const list = useCallback(async (override?: ListArgs) => {
+  const list = useCallback(async (override?: AssetsArgs) => {
     if (!organizationId) return;
     setLoading(true);
     setError(null);
@@ -63,7 +63,7 @@ export function useAssets(args?: ListArgs) {
       // - folderId is string => assets within folder_id
       // - folderId === undefined => no folder filter
       if (a.folderId === null) q = q.is('folder_id', null);
-      else if (typeof a.folderId === 'string') q = q.eq('folder_id', a.folderId);
+      else if (a.folderId) q = q.eq('folder_id', a.folderId);
 
       // Category / Aba
       if (a.type) {
