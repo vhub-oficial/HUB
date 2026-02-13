@@ -114,7 +114,11 @@ export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart }) =>
   return (
     <button
       draggable
-      onDragStart={(e) => onDragStart?.(e, asset.id)}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/x-vhub-asset-id', asset.id);
+        e.dataTransfer.setData('text/plain', asset.id);
+        if (onDragStart) onDragStart(e, asset.id);
+      }}
       onClick={() => navigate(`/assets/${asset.id}`)}
       className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative"
     >
