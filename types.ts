@@ -8,6 +8,7 @@ export interface UserProfile {
   role: Role;
   avatar_url?: string;
   is_active?: boolean;
+  disabled?: boolean;
 }
 
 export interface Folder {

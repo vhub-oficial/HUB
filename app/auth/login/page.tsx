@@ -7,6 +7,7 @@ import { normalizeAuthError } from '../../../lib/errorMessages';
 
 export const LoginPage: React.FC = () => {
   const { signIn, signUp, user, profile, needsProvisioning, authError } = useAuth();
+  const blockedMessage = 'Seu acesso foi bloqueado pelo administrador desta organização.';
   const navigate = useNavigate();
   
   const [isRegistering, setIsRegistering] = useState(false);
@@ -85,7 +86,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {error && (
-            <div className="mb-4 bg-red-900/20 border border-red-900/50 p-3 rounded flex items-center gap-2 text-red-200 text-sm">
+            <div className={`mb-4 p-3 rounded flex items-center gap-2 text-sm ${error === blockedMessage ? 'bg-amber-900/20 border border-amber-700/50 text-amber-100' : 'bg-red-900/20 border border-red-900/50 text-red-200'}`}>
                 <AlertCircle size={16} />
                 <span>{error}</span>
             </div>
