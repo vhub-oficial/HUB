@@ -355,31 +355,24 @@ export const DashboardPage: React.FC = () => {
 
                    {activeFolderId && (
                      <div className="mt-3 flex items-center gap-2">
+                       {/* RAIZ (drop target para remover da pasta) */}
                        <button
-                         className="text-sm text-gray-300 hover:text-white"
+                         className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
                          onClick={() => setActiveFolderId(null)}
+                         onDragOver={(e) => e.preventDefault()}
+                         onDrop={handleDropToUnfiled}
+                         title="Solte aqui para remover da pasta (voltar para a raiz)"
                        >
-                         ← Voltar
+                         {type ? type.toUpperCase() : 'RAIZ'}
                        </button>
+
                        <span className="text-gray-500 text-sm">/</span>
+
                        <span className="text-gray-200 text-sm">
                          {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
                        </span>
                      </div>
                    )}
-
-                   <div
-                     className="mt-4 text-left bg-black/20 border border-dashed border-border rounded-2xl p-4 hover:border-gold/40 transition-colors"
-                     onDragOver={(e) => e.preventDefault()}
-                     onDrop={handleDropToUnfiled}
-                     onClick={() => setActiveFolderId(null)}
-                     title="Solte aqui para tirar da pasta"
-                   >
-                     <div className="text-white font-semibold">📂 Soltos</div>
-                     <div className="text-gray-400 text-sm mt-1">
-                       Assets sem pasta (arraste aqui para remover da pasta)
-                     </div>
-                   </div>
 
                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                      {foldersFiltered.map((f) => (
