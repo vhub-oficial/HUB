@@ -19,6 +19,7 @@ export type AssetRow = {
 
 type AssetsArgs = {
   folderId?: string | null; // null => root assets (folder_id is null). undefined => don't filter by folder
+  onlyUnfoldered?: boolean;
   type?: string | null; // category/aba
   query?: string | null;
   assetKind?: string | null; // legacy (if you used assets.type as "video"), keep for later if needed
@@ -62,8 +63,11 @@ export function useAssets(args?: AssetsArgs) {
       // - folderId === null => root assets only (folder_id IS NULL)
       // - folderId is string => assets within folder_id
       // - folderId === undefined => no folder filter
-      if (a.folderId === null) q = q.is('folder_id', null);
-      else if (a.folderId) q = q.eq('folder_id', a.folderId);
+      if (a.onlyUnfoldered) {
+        q = q.is('folder_id', null);
+      }
+      if (a.folderId) q = q.eq('folder_id', a.folderId);
+      else if (a.folderId === null) q = q.is('folder_id', null);
 
       // Category / Aba
       if (a.type) {
@@ -320,6 +324,17 @@ export function useAssets(args?: AssetsArgs) {
     return true;
   }, [organizationId, user, role]);
 
+  const moveAssetToFolder = useCallback(async (assetId: string, folderId: string | null) => {
+    if (!organizationId) throw new Error('Sem organização');
+    const { error } = await supabase
+      .from('assets')
+      .update({ folder_id: folderId })
+      .eq('id', assetId)
+      .eq('organization_id', organizationId);
+
+    if (error) throw error;
+  }, [organizationId]);
+
   useEffect(() => {
     if (!organizationId) return;
     list();
@@ -337,8 +352,8 @@ export function useAssets(args?: AssetsArgs) {
   }, [organizationId, list]);
 
   const memo = useMemo(
-    () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset }),
-    [loading, error, assets, list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset]
+    () => ({ loading, error, assets, refresh: list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset, moveAssetToFolder }),
+    [loading, error, assets, list, uploadAsset, createAsset, getAssetById, updateAsset, deleteAsset, moveAssetToFolder]
   );
   return memo;
 }

@@ -10,12 +10,14 @@ export type FolderRow = {
   created_by: string | null;
   created_at: string | null;
   category_type?: string | null;
+  last_asset_at?: string | null;
 };
 
-export function useFolders(args?: { parentId?: string | null; type?: string | null }) {
+export function useFolders(args?: { parentId?: string | null; type?: string | null; sort?: 'recent' | 'name' | 'activity' }) {
   const { organizationId, user } = useAuth();
   const parentId = args?.parentId ?? null;
   const type = args?.type ?? null;
+  const sort = args?.sort ?? 'recent';
 
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,27 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     setLoading(true);
     setError(null);
 
+    if (sort === 'activity' && type && parentId === null) {
+      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: type });
+      if (e) {
+        setError(e.message);
+        setFolders([]);
+        setLoading(false);
+        return;
+      }
+
+      const sorted = (data ?? []).sort((a: any, b: any) => {
+        const ta = a.last_asset_at ? new Date(a.last_asset_at).getTime() : 0;
+        const tb = b.last_asset_at ? new Date(b.last_asset_at).getTime() : 0;
+        if (tb !== ta) return tb - ta;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setFolders(sorted as FolderRow[]);
+      setLoading(false);
+      return;
+    }
+
     const selectCols = supportsCategoryType
       ? 'id,name,parent_id,organization_id,created_by,created_at,category_type'
       : 'id,name,parent_id,organization_id,created_by,created_at';
@@ -59,7 +82,6 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
       .from('folders')
       .select(selectCols)
       .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false })
       .limit(200);
 
     if (parentId === null) q = q.is('parent_id', null);
@@ -68,6 +90,9 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     if (supportsCategoryType && type) {
       q = q.eq('category_type', type);
     }
+
+    if (sort === 'name') q = q.order('name', { ascending: true });
+    else q = q.order('created_at', { ascending: false });
 
     const { data, error: e } = await q;
 
@@ -79,7 +104,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     }
 
     setLoading(false);
-  }, [organizationId, parentId, supportsCategoryType, type]);
+  }, [organizationId, parentId, sort, supportsCategoryType, type]);
 
   const getFolderById = useCallback(async (id: string) => {
     if (!organizationId) return null;
