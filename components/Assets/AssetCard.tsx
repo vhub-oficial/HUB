@@ -10,6 +10,7 @@ type Props = {
   asset: AssetRow;
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
+  onDragEnd?: () => void;
   onMoveToRoot?: () => void;
 };
 
@@ -51,7 +52,7 @@ const buildDownloadName = (asset: AssetRow) => {
   return `${base}${ext}`;
 };
 
-export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart, onMoveToRoot }) => {
+export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart, onDragEnd, onMoveToRoot }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
@@ -119,6 +120,9 @@ export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart, onMo
         e.dataTransfer.setData('application/x-vhub-asset-id', asset.id);
         e.dataTransfer.setData('text/plain', asset.id);
         if (onDragStart) onDragStart(e, asset.id);
+      }}
+      onDragEnd={() => {
+        if (onDragEnd) onDragEnd();
       }}
       onClick={() => navigate(`/assets/${asset.id}`)}
       className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative"
