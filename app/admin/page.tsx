@@ -97,7 +97,7 @@ export const AdminPage: React.FC = () => {
 
       const { error } = await supabase
         .from('users')
-        .update({ organization_id: null, role: 'viewer' })
+        .update({ organization_id: null, role: 'viewer', is_active: false })
         .eq('id', userId)
         .eq('organization_id', organizationId);
 

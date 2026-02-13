@@ -12,6 +12,7 @@ import { ProfilePage } from './app/profile/page';
 import { LoginPage } from './app/auth/login/page';
 import { PendingAccessPage } from './app/pending/page';
 import { InviteAcceptPage } from './app/auth/invite/[token]/page';
+import { BlockedPage } from './app/blocked/page';
 import { RequireRole } from './components/Guards/RequireRole';
 import { AdminPage } from './app/admin/page';
 import { Loader2 } from 'lucide-react';
@@ -19,7 +20,7 @@ import { NewAssetModal } from './components/Assets/NewAssetModal';
 
 // Protected Route Wrapper
 const ProtectedLayout = () => {
-  const { profile, loading, user, needsProvisioning } = useAuth();
+  const { profile, loading, user, needsProvisioning, isBlocked } = useAuth();
   const { newAssetOpen, initialCategory, closeNewAsset } = useUI();
 
   if (loading) {
@@ -28,6 +29,11 @@ const ProtectedLayout = () => {
             <Loader2 className="animate-spin" size={48} />
         </div>
     );
+  }
+
+
+  if (isBlocked) {
+    return <BlockedPage />;
   }
 
   if (!profile) {
@@ -65,6 +71,7 @@ const App: React.FC = () => {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/pending" element={<PendingAccessPage />} />
             <Route path="/invite/:token" element={<InviteAcceptPage />} />
+            <Route path="/blocked" element={<BlockedPage />} />
 
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
