@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useAssets } from '../../hooks/useAssets';
 import { useAuth } from '../../contexts/AuthContext';
+import { inferExternalMetaFromUrl } from '../../lib/externalMedia';
 
 const CATEGORIES = [
   { key: 'deepfakes', label: 'Deepfakes' },
@@ -22,16 +23,6 @@ function normalizeTags(input: string) {
     .filter(Boolean)
     .map((t) => t.toLowerCase())
     .map((t) => t.replace(/\s+/g, '-'));
-}
-
-function detectProvider(url: string) {
-  const u = url.toLowerCase();
-  if (u.includes('drive.google.com')) return 'gdrive';
-  if (u.includes('docs.google.com')) return 'gdocs';
-  if (u.includes('dropbox.com')) return 'dropbox';
-  if (u.includes('minimax')) return 'minimax';
-  if (u.includes('mega.nz')) return 'mega';
-  return 'generic';
 }
 
 export const NewAssetModal: React.FC<{
@@ -101,14 +92,22 @@ export const NewAssetModal: React.FC<{
     setBusy(true);
     try {
       if (mode === 'external') {
-        if (!url.trim()) return setErr('Link do ativo é obrigatório.');
+        const trimmed = url.trim();
+        if (!trimmed) return setErr('Link do ativo é obrigatório.');
+        const externalMeta = inferExternalMetaFromUrl(trimmed);
+        const nextMeta = {
+          ...(typeof meta === 'object' && meta ? meta : {}),
+          category,
+          ...externalMeta,
+        };
+
         await createAsset({
           name: name.trim(),
-          url: url.trim(),
+          url: trimmed,
           categoryType: category,
           tags,
           folderId,
-          meta: { ...meta, category, source: 'external', provider: detectProvider(url.trim()) },
+          meta: nextMeta,
         });
       } else {
         if (!file) return setErr('Selecione um arquivo para upload.');
