@@ -270,8 +270,15 @@ export const DashboardPage: React.FC = () => {
                        <option value="activity">Última atividade</option>
                      </select>
                      <button
-                       className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60"
-                       onClick={() => setNewFolderOpen(true)}
+                       className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                       disabled={!type}
+                       onClick={() => {
+                         if (!type) {
+                           alert('Selecione uma categoria antes de criar uma pasta.');
+                           return;
+                         }
+                         setNewFolderOpen(true);
+                       }}
                      >
                        + Nova pasta
                      </button>
@@ -314,7 +321,14 @@ export const DashboardPage: React.FC = () => {
       <NewFolderModal
         open={newFolderOpen}
         onClose={() => setNewFolderOpen(false)}
-        onCreate={(name) => createFolder(name, { parentId: null, type: type ?? null }).then(() => undefined)}
+        onCreate={(name) => {
+          if (!type) {
+            alert('Selecione uma categoria antes de criar uma pasta.');
+            return Promise.resolve();
+          }
+
+          return createFolder(name, { parentId: null, type }).then(() => undefined);
+        }}
         title={type ? `Nova pasta em ${type.toUpperCase()}` : 'Nova pasta'}
       />
 
