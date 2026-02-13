@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetRow } from '../../hooks/useAssets';
-import { Play, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react';
+import { Play, Link as LinkIcon, Pencil, Trash2, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { useAssets } from '../../hooks/useAssets';
@@ -18,11 +18,74 @@ const isExternal = (asset: AssetRow) => {
   return typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url);
 };
 
+const sanitizeFilename = (name: string) =>
+  (name || 'download')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .slice(0, 120);
+
+const extFromMime = (mime?: string | null) => {
+  if (!mime) return '';
+  const m = mime.toLowerCase();
+  if (m.includes('video/mp4')) return '.mp4';
+  if (m.includes('video/quicktime')) return '.mov';
+  if (m.includes('video/webm')) return '.webm';
+  if (m.includes('audio/mpeg')) return '.mp3';
+  if (m.includes('audio/wav')) return '.wav';
+  if (m.includes('audio/mp4')) return '.m4a';
+  if (m.includes('image/png')) return '.png';
+  if (m.includes('image/jpeg')) return '.jpg';
+  if (m.includes('image/webp')) return '.webp';
+  return '';
+};
+
+const buildDownloadName = (asset: AssetRow) => {
+  const base = sanitizeFilename(asset.name || asset.meta?.original_name || 'download');
+  const original = (asset.meta?.original_name as string | undefined) || '';
+  const originalExt = original.includes('.') ? `.${original.split('.').pop()}` : '';
+  const mimeExt = extFromMime(asset.meta?.mime_type);
+  const ext = originalExt || mimeExt || '';
+  return `${base}${ext}`;
+};
+
 export const AssetCard: React.FC<Props> = ({ asset, onDeleted }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
   const [src, setSrc] = React.useState<string>('');
+
+  const handleDownload = React.useCallback(async () => {
+    try {
+      // External: abre o link (download direto depende do provider)
+      if (isExternal(asset)) {
+        const direct = asset.meta?.download_url || asset.url;
+        window.open(direct, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      // Storage: gera signed URL e força download
+      if (!organizationId) return;
+      const bucket = getOrgBucketName(organizationId);
+      const signed = await createSignedUrl(bucket, asset.url, 3600);
+      const filename = buildDownloadName(asset);
+
+      // força download via blob (mais confiável que <a download> com cross-origin)
+      const res = await fetch(signed);
+      if (!res.ok) throw new Error('download_failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
+    } catch {
+      // fallback: se algo der errado, tenta abrir a página de detalhe
+      navigate(`/assets/${asset.id}`);
+    }
+  }, [asset, organizationId, navigate]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -54,6 +117,17 @@ export const AssetCard: React.FC<Props> = ({ asset, onDeleted }) => {
     >
       {/* Quick actions */}
       <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleDownload();
+          }}
+          title="Download"
+        >
+          <Download size={16} />
+        </button>
         {(role === 'admin' || role === 'editor') && (
           <button
             className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
