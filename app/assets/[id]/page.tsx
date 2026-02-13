@@ -27,6 +27,7 @@ export const AssetDetailPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [asset, setAsset] = React.useState<AssetRow | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string>('');
+  const [isExternalEmbed, setIsExternalEmbed] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
   const [editing, setEditing] = React.useState(false);
@@ -55,13 +56,25 @@ export const AssetDetailPage: React.FC = () => {
         setMetaJson(JSON.stringify(a.meta ?? {}, null, 2));
 
         // preview
-        if (isExternal(a)) {
-          setPreviewUrl(a.meta?.thumbnail_url ?? '');
+        const meta = (a.meta ?? {}) as any;
+
+        if (meta?.source === 'external') {
+          if (typeof meta?.preview_url === 'string' && meta.preview_url) {
+            setPreviewUrl(meta.preview_url);
+            setIsExternalEmbed(true);
+          } else if (typeof a?.url === 'string' && a.url) {
+            setPreviewUrl(a.url);
+            setIsExternalEmbed(false);
+          } else {
+            setPreviewUrl('');
+            setIsExternalEmbed(false);
+          }
         } else if (organizationId) {
           const bucket = getOrgBucketName(organizationId);
           const signed = await createSignedUrl(bucket, a.url, 3600);
           if (!mounted) return;
           setPreviewUrl(signed);
+          setIsExternalEmbed(false);
         }
       } catch (e: any) {
         if (!mounted) return;
@@ -219,11 +232,30 @@ export const AssetDetailPage: React.FC = () => {
             <div className="text-white font-semibold">{asset.type ?? '—'}</div>
           </div>
 
-          <div className="aspect-video bg-black/60 flex items-center justify-center">
-            {!external && previewUrl ? (
-              <video src={previewUrl} controls className="w-full h-full object-contain" />
-            ) : external && previewUrl ? (
-              <img src={previewUrl} className="w-full h-full object-contain" alt={asset.name} />
+          <div className="aspect-video bg-black/60 flex items-center justify-center p-4">
+            {meta?.source === 'external' ? (
+              isExternalEmbed && previewUrl ? (
+                <div className="w-full aspect-video rounded-2xl overflow-hidden border border-border bg-black/30">
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    title={asset?.name ?? 'External preview'}
+                  />
+                </div>
+              ) : (
+                <a
+                  href={asset?.url ?? '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-white/5"
+                >
+                  Abrir link externo
+                </a>
+              )
+            ) : previewUrl ? (
+              <video src={previewUrl} controls className="w-full rounded-2xl" />
             ) : (
               <div className="text-gray-500">Sem preview</div>
             )}
