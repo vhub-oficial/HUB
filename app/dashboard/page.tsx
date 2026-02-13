@@ -17,7 +17,6 @@ export const DashboardPage: React.FC = () => {
   const typeRaw = searchParams.get('type');
   const type = typeRaw ? typeRaw.toLowerCase() : null;
   const q = searchParams.get('q') ?? '';
-  const folderId = searchParams.get('folder');
   const isSearching = !type && !!q.trim();
   const { organizationId } = useAuth();
   
@@ -92,20 +91,30 @@ export const DashboardPage: React.FC = () => {
   }, [filters.tags]);
 
   const { options } = useFilterOptions(type);
-  const [folderSort, setFolderSort] = useState<'recent'|'name'|'activity'>('recent');
+  const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
+  // ✅ novo estado: pasta ativa (quando null, mostra "soltos")
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+
+  const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: folderId ?? null,
+    folderId: null,
     tagsAny,
     metaFilters: filters.meta,
     query: q ? q : null,
     limit: 120,
-  }), [type, folderId, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+  }), [type, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
   const { assets: looseAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
-  const { folders, createFolder, renameFolder, deleteFolder } = useFolders({ parentId: null, type: type ?? null, sort: folderSort });
+  const {
+    folders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    refresh: refreshFolders,
+  } = useFolders({ parentId: null, type: type ?? null, sort: folderSortForHook });
   const [newFolderOpen, setNewFolderOpen] = useState(false);
 
   const foldersForCategory = useMemo(() => {
@@ -116,49 +125,82 @@ export const DashboardPage: React.FC = () => {
 
   const foldersFiltered = useMemo(() => {
     const qq = (q ?? '').trim().toLowerCase();
-    if (!qq) return foldersForCategory;
-    return foldersForCategory.filter((f) => f.name.toLowerCase().includes(qq));
-  }, [foldersForCategory, q]);
+    let next = !qq ? foldersForCategory : foldersForCategory.filter((f) => f.name.toLowerCase().includes(qq));
+    if (foldersSort === 'za') next = [...next].reverse();
+    return next;
+  }, [foldersForCategory, q, foldersSort]);
 
-  const openFolder = (id: string) => {
-    const sp = new URLSearchParams(searchParams);
-    sp.set('folder', id);
-    navigate(`/dashboard?${sp.toString()}`);
-  };
-
-  const closeFolder = () => {
-    const sp = new URLSearchParams(searchParams);
-    sp.delete('folder');
-    navigate(`/dashboard?${sp.toString()}`);
-  };
-
-  const currentFolder = useMemo(() => {
-    if (!folderId) return null;
-    return folders.find((f) => f.id === folderId) ?? null;
-  }, [folderId, folders]);
-
-  const onDragStartAsset = (e: React.DragEvent, assetId: string) => {
-    e.dataTransfer.setData('text/vhub-asset-id', assetId);
+  const onDragStartAsset = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const onDropOnFolder = async (e: React.DragEvent, folderId: string) => {
+  // helper: pega assetId do drag
+  const getDraggedAssetId = (e: React.DragEvent) => {
+    return (
+      e.dataTransfer.getData('application/x-vhub-asset-id') ||
+      e.dataTransfer.getData('text/plain') ||
+      ''
+    ).trim();
+  };
+
+  // drop em uma pasta
+  const handleDropOnFolder = async (folderId: string, e: React.DragEvent) => {
     e.preventDefault();
-    const assetId = e.dataTransfer.getData('text/vhub-asset-id');
+    e.stopPropagation();
+    const assetId = getDraggedAssetId(e);
     if (!assetId) return;
 
-    try {
-      await moveAssetToFolder(assetId, folderId);
-      refresh();
-    } catch (err: any) {
-      alert(err?.message ?? 'Falha ao mover asset para a pasta');
-    }
+    await moveAssetToFolder(assetId, folderId);
+    refresh();
   };
 
-  const onDragOverFolder = (e: React.DragEvent) => {
+  // drop em "soltos"
+  const handleDropToUnfiled = async (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.stopPropagation();
+    const assetId = getDraggedAssetId(e);
+    if (!assetId) return;
+    await moveAssetToFolder(assetId, null);
+    refresh();
   };
+
+  // renomear
+  const onRenameFolder = async (folderId: string, currentName: string) => {
+    const next = window.prompt('Renomear pasta:', currentName);
+    if (!next) return;
+    const name = next.trim();
+    if (!name || name === currentName) return;
+    await renameFolder(folderId, name);
+    refreshFolders?.();
+  };
+
+  // apagar (enterprise-safe: esvazia antes)
+  const onDeleteFolder = async (folderId: string, folderName: string) => {
+    const ok = window.confirm(`Apagar a pasta "${folderName}"? Os assets serão movidos para "Soltos".`);
+    if (!ok) return;
+
+    const { error: upErr } = await supabase
+      .from('assets')
+      .update({ folder_id: null })
+      .eq('folder_id', folderId);
+
+    if (upErr) {
+      alert(upErr.message ?? 'Falha ao mover assets para "Soltos"');
+      return;
+    }
+
+    await deleteFolder(folderId);
+
+    if (activeFolderId === folderId) setActiveFolderId(null);
+
+    refresh();
+    refreshFolders?.();
+  };
+
+  const assetsScoped = useMemo(() => {
+    if (activeFolderId) return looseAssets.filter((a) => a.folder_id === activeFolderId);
+    return looseAssets.filter((a) => !a.folder_id);
+  }, [looseAssets, activeFolderId]);
 
   const loading = assetsLoading;
 
@@ -281,110 +323,133 @@ export const DashboardPage: React.FC = () => {
                    />
                  )}
 
-                 <div className="flex items-center justify-between mt-4">
-                   <div>
-                     <div className="text-white font-semibold">
-                       {currentFolder ? `Pasta: ${currentFolder.name}` : 'Pastas'}
+                 {/* ✅ Pastas (Drive-style) */}
+                 <div className="mt-6">
+                   <div className="flex items-center justify-between gap-3">
+                     <div>
+                       <div className="text-white font-semibold">Pastas</div>
+                       <div className="text-gray-400 text-sm">
+                         {activeFolderId ? 'Dentro da pasta' : 'Soltos (sem pasta)'}
+                       </div>
                      </div>
-                     {currentFolder && (
+
+                     <div className="flex items-center gap-2">
+                       <select
+                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                         value={foldersSort}
+                         onChange={(e) => setFoldersSort(e.target.value as any)}
+                       >
+                         <option value="recent">Recentes</option>
+                         <option value="az">A–Z</option>
+                         <option value="za">Z–A</option>
+                       </select>
+
                        <button
-                         className="text-sm text-gray-400 hover:text-white mt-1"
-                         onClick={closeFolder}
+                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
+                         onClick={() => setNewFolderOpen(true)}
+                       >
+                         + Nova pasta
+                       </button>
+                     </div>
+                   </div>
+
+                   {activeFolderId && (
+                     <div className="mt-3 flex items-center gap-2">
+                       <button
+                         className="text-sm text-gray-300 hover:text-white"
+                         onClick={() => setActiveFolderId(null)}
                        >
                          ← Voltar
                        </button>
-                     )}
-                   </div>
-                   <div className="flex items-center gap-2">
-                     <select
-                       className="bg-black/40 border border-border rounded-xl px-3 py-2 text-white"
-                       value={folderSort}
-                       onChange={(e) => setFolderSort(e.target.value as any)}
-                     >
-                       <option value="recent">Recentes</option>
-                       <option value="name">Nome A–Z</option>
-                       <option value="activity">Última atividade</option>
-                     </select>
-                     <button
-                       className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:bg-black/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                       disabled={!type}
-                       onClick={() => {
-                         if (!type) {
-                           alert('Selecione uma categoria antes de criar uma pasta.');
-                           return;
-                         }
-                         setNewFolderOpen(true);
-                       }}
-                     >
-                       + Nova pasta
-                     </button>
-                   </div>
-                 </div>
+                       <span className="text-gray-500 text-sm">/</span>
+                       <span className="text-gray-200 text-sm">
+                         {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
+                       </span>
+                     </div>
+                   )}
 
-                 {!currentFolder && (
+                   <div
+                     className="mt-4 text-left bg-black/20 border border-dashed border-border rounded-2xl p-4 hover:border-gold/40 transition-colors"
+                     onDragOver={(e) => e.preventDefault()}
+                     onDrop={handleDropToUnfiled}
+                     onClick={() => setActiveFolderId(null)}
+                     title="Solte aqui para tirar da pasta"
+                   >
+                     <div className="text-white font-semibold">📂 Soltos</div>
+                     <div className="text-gray-400 text-sm mt-1">
+                       Assets sem pasta (arraste aqui para remover da pasta)
+                     </div>
+                   </div>
+
                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                      {foldersFiltered.map((f) => (
                        <div
                          key={f.id}
-                         onDragOver={onDragOverFolder}
-                         onDrop={(e) => onDropOnFolder(e, f.id)}
-                         className="text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30 relative"
+                         className={`text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30 hover:border-gold/40 transition-colors relative ${
+                           activeFolderId === f.id ? 'border-gold/40' : ''
+                         }`}
+                         onDragOver={(e) => e.preventDefault()}
+                         onDrop={(e) => handleDropOnFolder(f.id, e)}
                        >
                          <button
-                           className="absolute inset-0"
-                           onClick={() => openFolder(f.id)}
-                           aria-label={`Abrir pasta ${f.name}`}
-                         />
-                         <div className="relative z-10 flex items-start justify-between gap-3">
-                           <div>
-                             <div className="text-white font-semibold">{f.name}</div>
-                             <div className="text-gray-400 text-sm mt-1">Abrir</div>
-                           </div>
+                           className="w-full text-left"
+                           onClick={() => setActiveFolderId(f.id)}
+                         >
+                           <div className="text-white font-semibold">{f.name}</div>
+                           <div className="text-gray-400 text-sm mt-1">Abrir</div>
+                         </button>
 
-                           <div className="flex gap-2">
-                             <button
-                               className="px-2 py-1 text-xs rounded-lg border border-border bg-black/30 hover:bg-black/40 text-white"
-                               onClick={(e) => {
-                                 e.preventDefault();
-                                 e.stopPropagation();
-                                 const next = window.prompt('Renomear pasta:', f.name);
-                                 if (!next) return;
-                                 renameFolder(f.id, next).catch((err) => alert(err?.message ?? 'Falha ao renomear'));
-                               }}
-                             >
-                               Renomear
-                             </button>
+                         <div className="absolute top-3 right-3 flex gap-2">
+                           <button
+                             className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-gray-200 hover:border-gold/40"
+                             onClick={(e) => {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               onRenameFolder(f.id, f.name);
+                             }}
+                             title="Renomear"
+                           >
+                             Renomear
+                           </button>
 
-                             <button
-                               className="px-2 py-1 text-xs rounded-lg border border-red-500/40 bg-black/30 hover:bg-black/40 text-red-300"
-                               onClick={(e) => {
-                                 e.preventDefault();
-                                 e.stopPropagation();
-                                 if (!window.confirm('Apagar esta pasta? Os assets NÃO serão apagados (vão ficar soltos).')) return;
-                                 deleteFolder(f.id).catch((err) => alert(err?.message ?? 'Falha ao apagar pasta'));
-                               }}
-                             >
-                               Apagar
-                             </button>
-                           </div>
+                           <button
+                             className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-red-200 hover:border-red-400/60"
+                             onClick={(e) => {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               onDeleteFolder(f.id, f.name);
+                             }}
+                             title="Apagar"
+                           >
+                             Apagar
+                           </button>
                          </div>
                        </div>
                      ))}
+
                      {foldersFiltered.length === 0 && (
-                       <div className="text-gray-500 text-sm">Nenhuma pasta encontrada.</div>
+                       <div className="text-gray-500 text-sm mt-2">Nenhuma pasta encontrada.</div>
                      )}
                    </div>
-                 )}
+                 </div>
 
                  {/* Asset Grid */}
-                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {looseAssets.length > 0 ? (
-                        looseAssets.map(asset => <AssetCard key={asset.id} asset={asset} onDeleted={refresh} onDragStart={onDragStartAsset} />)
-                    ) : (
-                        <div className="col-span-full py-16 text-center border border-dashed border-[#222] rounded-xl">
-                            <p className="text-gray-500">Nenhum ativo encontrado nesta seção.</p>
-                        </div>
-                    )}
+                 <div className="mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {assetsScoped.map((asset) => (
+                      <AssetCard
+                        key={asset.id}
+                        asset={asset}
+                        onDeleted={refresh}
+                        onDragStart={onDragStartAsset}
+                      />
+                    ))}
+                  </div>
+                  {assetsScoped.length === 0 && (
+                    <div className="text-gray-500 text-sm mt-3">
+                      {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
+                    </div>
+                  )}
                  </div>
              </div>
          )}
