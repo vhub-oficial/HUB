@@ -99,15 +99,15 @@ export const DashboardPage: React.FC = () => {
 
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: null,
+    folderId: activeFolderId ?? null,
     tagsAny,
     metaFilters: filters.meta,
     query: q ? q : null,
     limit: 120,
-  }), [type, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+  }), [type, activeFolderId, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
-  const { assets: looseAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
+  const { assets: scopedAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
   const {
     folders,
     createFolder,
@@ -154,16 +154,6 @@ export const DashboardPage: React.FC = () => {
     refresh();
   };
 
-  // drop em "soltos"
-  const handleDropToUnfiled = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const assetId = getDraggedAssetId(e);
-    if (!assetId) return;
-    await moveAssetToFolder(assetId, null);
-    refresh();
-  };
-
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
     const next = window.prompt('Renomear pasta:', currentName);
@@ -196,11 +186,6 @@ export const DashboardPage: React.FC = () => {
     refresh();
     refreshFolders?.();
   };
-
-  const assetsScoped = useMemo(() => {
-    if (activeFolderId) return looseAssets.filter((a) => a.folder_id === activeFolderId);
-    return looseAssets.filter((a) => !a.folder_id);
-  }, [looseAssets, activeFolderId]);
 
   const loading = assetsLoading;
 
@@ -359,9 +344,7 @@ export const DashboardPage: React.FC = () => {
                        <button
                          className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
                          onClick={() => setActiveFolderId(null)}
-                         onDragOver={(e) => e.preventDefault()}
-                         onDrop={handleDropToUnfiled}
-                         title="Solte aqui para remover da pasta (voltar para a raiz)"
+                         title="Voltar para a raiz"
                        >
                          {type ? type.toUpperCase() : 'RAIZ'}
                        </button>
@@ -429,16 +412,24 @@ export const DashboardPage: React.FC = () => {
                  {/* Asset Grid */}
                  <div className="mt-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {assetsScoped.map((asset) => (
+                    {scopedAssets.map((asset) => (
                       <AssetCard
                         key={asset.id}
                         asset={asset}
                         onDeleted={refresh}
                         onDragStart={onDragStartAsset}
+                        onMoveToRoot={
+                          activeFolderId
+                            ? async () => {
+                                await moveAssetToFolder(asset.id, null);
+                                refresh();
+                              }
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
-                  {assetsScoped.length === 0 && (
+                  {scopedAssets.length === 0 && (
                     <div className="text-gray-500 text-sm mt-3">
                       {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
                     </div>
