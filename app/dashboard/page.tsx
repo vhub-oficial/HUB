@@ -94,6 +94,7 @@ export const DashboardPage: React.FC = () => {
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   // ✅ novo estado: pasta ativa (quando null, mostra "soltos")
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
@@ -154,6 +155,16 @@ export const DashboardPage: React.FC = () => {
     refresh();
   };
 
+  const handleDropToUnfiled = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const assetId = getDraggedAssetId(e);
+    if (!assetId) return;
+
+    await moveAssetToFolder(assetId, null);
+    refresh();
+  };
+
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
     const next = window.prompt('Renomear pasta:', currentName);
@@ -181,7 +192,10 @@ export const DashboardPage: React.FC = () => {
 
     await deleteFolder(folderId);
 
-    if (activeFolderId === folderId) setActiveFolderId(null);
+    if (activeFolderId === folderId) {
+      setFolderMenuOpen(false);
+      setActiveFolderId(null);
+    }
 
     refresh();
     refreshFolders?.();
@@ -308,17 +322,11 @@ export const DashboardPage: React.FC = () => {
                    />
                  )}
 
-                 {/* ✅ Pastas (Drive-style) */}
+                 {/* ✅ Pastas (Drive-style clean) */}
                  <div className="mt-6">
-                   <div className="flex items-center justify-between gap-3">
-                     <div>
-                       <div className="text-white font-semibold">Pastas</div>
-                       <div className="text-gray-400 text-sm">
-                         {activeFolderId ? 'Dentro da pasta' : 'Soltos (sem pasta)'}
-                       </div>
-                     </div>
-
-                     <div className="flex items-center gap-2">
+                   {/* Top bar (somente no root) */}
+                   {!activeFolderId && (
+                     <div className="flex items-center justify-end gap-2">
                        <select
                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                          value={foldersSort}
@@ -336,77 +344,129 @@ export const DashboardPage: React.FC = () => {
                          + Nova pasta
                        </button>
                      </div>
-                   </div>
+                   )}
 
+                   {/* Breadcrumb (somente dentro da pasta) */}
                    {activeFolderId && (
-                     <div className="mt-3 flex items-center gap-2">
-                       {/* RAIZ (drop target para remover da pasta) */}
+                     <div className="mt-2 flex items-center gap-2">
+                       {/* Root crumb = botão + drop target (Drive) */}
                        <button
                          className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
-                         onClick={() => setActiveFolderId(null)}
-                         title="Voltar para a raiz"
+                         onClick={() => {
+                           setFolderMenuOpen(false);
+                           setActiveFolderId(null);
+                         }}
+                         onDragOver={(e) => e.preventDefault()}
+                         onDrop={(e) => handleDropToUnfiled(e)}
+                         title="Voltar para a raiz (arraste aqui para mover para o root)"
                        >
                          {type ? type.toUpperCase() : 'RAIZ'}
                        </button>
 
                        <span className="text-gray-500 text-sm">/</span>
 
+                       {/* Pasta atual */}
                        <span className="text-gray-200 text-sm">
                          {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
                        </span>
+
+                       {/* Menu ⋯ (renomear/apagar) */}
+                       <div className="relative ml-2">
+                         <button
+                           className="text-sm text-gray-200 hover:text-white border border-border bg-black/30 rounded-lg px-2 py-1"
+                           onClick={() => setFolderMenuOpen((v) => !v)}
+                           title="Ações da pasta"
+                         >
+                           ⋯
+                         </button>
+
+                         {folderMenuOpen && (
+                           <div
+                             className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-[#0b0b0b] shadow-xl overflow-hidden z-20"
+                             onClick={(e) => e.stopPropagation()}
+                           >
+                             <button
+                               className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5"
+                               onClick={() => {
+                                 const f = foldersFiltered.find((x) => x.id === activeFolderId);
+                                 if (!f) return;
+                                 setFolderMenuOpen(false);
+                                 onRenameFolder(f.id, f.name);
+                               }}
+                             >
+                               Renomear
+                             </button>
+                             <button
+                               className="w-full text-left px-3 py-2 text-sm text-red-200 hover:bg-red-500/10"
+                               onClick={() => {
+                                 const f = foldersFiltered.find((x) => x.id === activeFolderId);
+                                 if (!f) return;
+                                 setFolderMenuOpen(false);
+                                 onDeleteFolder(f.id, f.name);
+                               }}
+                             >
+                               Apagar
+                             </button>
+                           </div>
+                         )}
+                       </div>
                      </div>
                    )}
 
-                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                     {foldersFiltered.map((f) => (
-                       <div
-                         key={f.id}
-                         className={`text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30 hover:border-gold/40 transition-colors relative ${
-                           activeFolderId === f.id ? 'border-gold/40' : ''
-                         }`}
-                         onDragOver={(e) => e.preventDefault()}
-                         onDrop={(e) => handleDropOnFolder(f.id, e)}
-                       >
-                         <button
-                           className="w-full text-left"
-                           onClick={() => setActiveFolderId(f.id)}
+                   {/* Grid de pastas (somente no root) */}
+                   {!activeFolderId && (
+                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {foldersFiltered.map((f) => (
+                         <div
+                           key={f.id}
+                           className="text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30 hover:border-gold/40 transition-colors relative"
+                           onDragOver={(e) => e.preventDefault()}
+                           onDrop={(e) => handleDropOnFolder(f.id, e)}
                          >
-                           <div className="text-white font-semibold">{f.name}</div>
-                           <div className="text-gray-400 text-sm mt-1">Abrir</div>
-                         </button>
-
-                         <div className="absolute top-3 right-3 flex gap-2">
                            <button
-                             className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-gray-200 hover:border-gold/40"
-                             onClick={(e) => {
-                               e.preventDefault();
-                               e.stopPropagation();
-                               onRenameFolder(f.id, f.name);
+                             className="w-full text-left"
+                             onClick={() => {
+                               setFolderMenuOpen(false);
+                               setActiveFolderId(f.id);
                              }}
-                             title="Renomear"
                            >
-                             Renomear
+                             <div className="text-white font-semibold">{f.name}</div>
                            </button>
 
-                           <button
-                             className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-red-200 hover:border-red-400/60"
-                             onClick={(e) => {
-                               e.preventDefault();
-                               e.stopPropagation();
-                               onDeleteFolder(f.id, f.name);
-                             }}
-                             title="Apagar"
-                           >
-                             Apagar
-                           </button>
+                           {/* Ações como ícone no canto (mais clean que botões grandes) */}
+                           <div className="absolute top-3 right-3 flex gap-2 opacity-0 hover:opacity-100 transition-opacity">
+                             <button
+                               className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-gray-200 hover:border-gold/40"
+                               onClick={(e) => {
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                 onRenameFolder(f.id, f.name);
+                               }}
+                               title="Renomear"
+                             >
+                               Renomear
+                             </button>
+
+                             <button
+                               className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-red-200 hover:border-red-400/60"
+                               onClick={(e) => {
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                 onDeleteFolder(f.id, f.name);
+                               }}
+                               title="Apagar"
+                             >
+                               Apagar
+                             </button>
+                           </div>
                          </div>
-                       </div>
-                     ))}
+                       ))}
 
-                     {foldersFiltered.length === 0 && (
-                       <div className="text-gray-500 text-sm mt-2">Nenhuma pasta encontrada.</div>
-                     )}
-                   </div>
+                       {foldersFiltered.length === 0 && (
+                         <div className="text-gray-500 text-sm mt-2">Nenhuma pasta encontrada.</div>
+                       )}
+                     </div>
+                   )}
                  </div>
 
                  {/* Asset Grid */}
