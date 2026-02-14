@@ -94,7 +94,10 @@ export const DashboardPage: React.FC = () => {
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   // ✅ novo estado: pasta ativa (quando null, mostra "soltos")
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [folderMenuOpenId, setFolderMenuOpenId] = useState<string | null>(null); // menu (...) no card
+  const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false); // menu (...) dentro da pasta
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
@@ -131,8 +134,14 @@ export const DashboardPage: React.FC = () => {
     return next;
   }, [foldersForCategory, q, foldersSort]);
 
-  const onDragStartAsset = (e: React.DragEvent) => {
+  const onDragStartAsset = (e: React.DragEvent, assetId: string) => {
+    setDraggingAssetId(assetId);
     e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDragEndAsset = () => {
+    setDraggingAssetId(null);
+    setDragOverFolderId(null);
   };
 
   // helper: pega assetId do drag
@@ -152,16 +161,6 @@ export const DashboardPage: React.FC = () => {
     if (!assetId) return;
 
     await moveAssetToFolder(assetId, folderId);
-    refresh();
-  };
-
-  const handleDropToUnfiled = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const assetId = getDraggedAssetId(e);
-    if (!assetId) return;
-
-    await moveAssetToFolder(assetId, null);
     refresh();
   };
 
@@ -193,7 +192,8 @@ export const DashboardPage: React.FC = () => {
     await deleteFolder(folderId);
 
     if (activeFolderId === folderId) {
-      setFolderMenuOpen(false);
+      setBreadcrumbMenuOpen(false);
+      setFolderMenuOpenId(null);
       setActiveFolderId(null);
     }
 
@@ -322,11 +322,77 @@ export const DashboardPage: React.FC = () => {
                    />
                  )}
 
-                 {/* ✅ Pastas (Drive-style clean) */}
+                 {/* ✅ Pastas (Drive-style) */}
                  <div className="mt-6">
-                   {/* Top bar (somente no root) */}
-                   {!activeFolderId && (
-                     <div className="flex items-center justify-end gap-2">
+                   {/* Top row: breadcrumb (somente quando dentro da pasta) + controles à direita */}
+                   <div className="flex items-center justify-between gap-3">
+                     <div className="min-h-[40px] flex items-center">
+                       {activeFolderId ? (
+                         <div className="flex items-center gap-2">
+                           {/* Chip da categoria (volta para raiz da categoria) */}
+                           <button
+                             className="text-sm text-gray-200 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
+                             onClick={() => {
+                               setActiveFolderId(null);
+                               setBreadcrumbMenuOpen(false);
+                             }}
+                             title="Voltar para a raiz"
+                           >
+                             {type ? type.toUpperCase() : 'RAIZ'}
+                           </button>
+
+                           <span className="text-gray-500 text-sm">/</span>
+
+                           {/* Chip da pasta atual (Drive-style) */}
+                           <div className="flex items-center gap-2">
+                             <div className="text-sm text-gray-100 bg-black/20 border border-border rounded-lg px-3 py-1">
+                               {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
+                             </div>
+
+                             {/* Menu (...) de ações da pasta atual */}
+                             <div className="relative">
+                               <button
+                                 className="w-9 h-9 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
+                                 onClick={() => setBreadcrumbMenuOpen((v) => !v)}
+                                 title="Ações da pasta"
+                               >
+                                 …
+                               </button>
+
+                               {breadcrumbMenuOpen && (
+                                 <div className="absolute z-20 mt-2 w-44 rounded-xl border border-border bg-black/90 backdrop-blur p-2">
+                                   <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+                                     onClick={() => {
+                                       setBreadcrumbMenuOpen(false);
+                                       const f = foldersFiltered.find((x) => x.id === activeFolderId);
+                                       if (f) onRenameFolder(f.id, f.name);
+                                     }}
+                                   >
+                                     Renomear
+                                   </button>
+                                   <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-red-200 hover:bg-red-500/10"
+                                     onClick={() => {
+                                       setBreadcrumbMenuOpen(false);
+                                       const f = foldersFiltered.find((x) => x.id === activeFolderId);
+                                       if (f) onDeleteFolder(f.id, f.name);
+                                     }}
+                                   >
+                                     Apagar
+                                   </button>
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="opacity-0 select-none">.</div>
+                       )}
+                     </div>
+
+                     {/* Controles à direita (sempre) */}
+                     <div className="flex items-center gap-2">
                        <select
                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                          value={foldersSort}
@@ -344,123 +410,119 @@ export const DashboardPage: React.FC = () => {
                          + Nova pasta
                        </button>
                      </div>
-                   )}
+                   </div>
 
-                   {/* Breadcrumb (somente dentro da pasta) */}
-                   {activeFolderId && (
-                     <div className="mt-2 flex items-center gap-2">
-                       {/* Root crumb = botão + drop target (Drive) */}
-                       <button
-                         className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
-                         onClick={() => {
-                           setFolderMenuOpen(false);
-                           setActiveFolderId(null);
-                         }}
-                         onDragOver={(e) => e.preventDefault()}
-                         onDrop={(e) => handleDropToUnfiled(e)}
-                         title="Voltar para a raiz (arraste aqui para mover para o root)"
-                       >
-                         {type ? type.toUpperCase() : 'RAIZ'}
-                       </button>
-
-                       <span className="text-gray-500 text-sm">/</span>
-
-                       {/* Pasta atual */}
-                       <span className="text-gray-200 text-sm">
-                         {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
-                       </span>
-
-                       {/* Menu ⋯ (renomear/apagar) */}
-                       <div className="relative ml-2">
-                         <button
-                           className="text-sm text-gray-200 hover:text-white border border-border bg-black/30 rounded-lg px-2 py-1"
-                           onClick={() => setFolderMenuOpen((v) => !v)}
-                           title="Ações da pasta"
-                         >
-                           ⋯
-                         </button>
-
-                         {folderMenuOpen && (
-                           <div
-                             className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-[#0b0b0b] shadow-xl overflow-hidden z-20"
-                             onClick={(e) => e.stopPropagation()}
-                           >
-                             <button
-                               className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-white/5"
-                               onClick={() => {
-                                 const f = foldersFiltered.find((x) => x.id === activeFolderId);
-                                 if (!f) return;
-                                 setFolderMenuOpen(false);
-                                 onRenameFolder(f.id, f.name);
-                               }}
-                             >
-                               Renomear
-                             </button>
-                             <button
-                               className="w-full text-left px-3 py-2 text-sm text-red-200 hover:bg-red-500/10"
-                               onClick={() => {
-                                 const f = foldersFiltered.find((x) => x.id === activeFolderId);
-                                 if (!f) return;
-                                 setFolderMenuOpen(false);
-                                 onDeleteFolder(f.id, f.name);
-                               }}
-                             >
-                               Apagar
-                             </button>
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                   )}
-
-                   {/* Grid de pastas (somente no root) */}
+                   {/* ✅ Folder cards: só aparecem na RAIZ (como Drive) */}
                    {!activeFolderId && (
                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                       {foldersFiltered.map((f) => (
-                         <div
-                           key={f.id}
-                           className="text-left bg-black/20 border border-border rounded-2xl p-4 hover:bg-black/30 hover:border-gold/40 transition-colors relative"
-                           onDragOver={(e) => e.preventDefault()}
-                           onDrop={(e) => handleDropOnFolder(f.id, e)}
-                         >
-                           <button
-                             className="w-full text-left"
-                             onClick={() => {
-                               setFolderMenuOpen(false);
-                               setActiveFolderId(f.id);
+                       {foldersFiltered.map((f) => {
+                         const isOver = dragOverFolderId === f.id && !!draggingAssetId;
+                         return (
+                           <div
+                             key={f.id}
+                             className={[
+                               'relative rounded-2xl border border-border bg-black/20 transition-all',
+                               'hover:bg-black/30 hover:border-gold/40',
+                               isOver ? 'border-gold/60 ring-2 ring-gold/20 scale-[1.01]' : '',
+                             ].join(' ')}
+                             onDragOver={(e) => {
+                               if (draggingAssetId) e.preventDefault();
+                             }}
+                             onDragEnter={() => {
+                               if (draggingAssetId) setDragOverFolderId(f.id);
+                             }}
+                             onDragLeave={() => {
+                               if (dragOverFolderId === f.id) setDragOverFolderId(null);
+                             }}
+                             onDrop={async (e) => {
+                               setDragOverFolderId(null);
+                               await handleDropOnFolder(f.id, e);
                              }}
                            >
-                             <div className="text-white font-semibold">{f.name}</div>
-                           </button>
-
-                           {/* Ações como ícone no canto (mais clean que botões grandes) */}
-                           <div className="absolute top-3 right-3 flex gap-2 opacity-0 hover:opacity-100 transition-opacity">
+                             {/* Card inteiro clicável */}
                              <button
-                               className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-gray-200 hover:border-gold/40"
-                               onClick={(e) => {
-                                 e.preventDefault();
-                                 e.stopPropagation();
-                                 onRenameFolder(f.id, f.name);
+                               className="w-full text-left p-4 flex items-center gap-3"
+                               onClick={() => {
+                                 setActiveFolderId(f.id);
+                                 setFolderMenuOpenId(null);
                                }}
-                               title="Renomear"
                              >
-                               Renomear
+                               {/* Ícone estilo Drive (inline SVG) */}
+                               <div className="w-11 h-11 rounded-xl bg-black/30 border border-border flex items-center justify-center">
+                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                   <path
+                                     d="M3.5 7.8c0-1.1.9-2 2-2h4.4c.5 0 1 .2 1.4.6l1 1c.4.4.9.6 1.4.6h4.9c1.1 0 2 .9 2 2v7.6c0 1.1-.9 2-2 2H5.5c-1.1 0-2-.9-2-2V7.8Z"
+                                     stroke="currentColor"
+                                     className="text-gray-200"
+                                     strokeWidth="1.6"
+                                   />
+                                   <circle
+                                     cx="12.4"
+                                     cy="13.2"
+                                     r="3.2"
+                                     stroke="currentColor"
+                                     className="text-gray-200"
+                                     strokeWidth="1.6"
+                                   />
+                                   <path
+                                     d="M11.6 11.8l2.1 1.4-2.1 1.4v-2.8Z"
+                                     fill="currentColor"
+                                     className="text-gray-200"
+                                   />
+                                 </svg>
+                               </div>
+
+                               <div className="flex-1">
+                                 <div className="text-white font-semibold leading-tight">{f.name}</div>
+                                 <div className="text-xs text-gray-500 mt-1">Pasta</div>
+                               </div>
                              </button>
 
-                             <button
-                               className="text-xs px-2 py-1 rounded-md bg-black/40 border border-border text-red-200 hover:border-red-400/60"
-                               onClick={(e) => {
-                                 e.preventDefault();
-                                 e.stopPropagation();
-                                 onDeleteFolder(f.id, f.name);
-                               }}
-                               title="Apagar"
-                             >
-                               Apagar
-                             </button>
+                             {/* Ações (...) no hover */}
+                             <div className="absolute top-3 right-3">
+                               <button
+                                 className="w-9 h-9 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                 onClick={() => setFolderMenuOpenId((v) => (v === f.id ? null : f.id))}
+                                 title="Ações"
+                               >
+                                 …
+                               </button>
+
+                               {folderMenuOpenId === f.id && (
+                                 <div className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-black/90 backdrop-blur p-2 z-20">
+                                   <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+                                     onClick={() => {
+                                       setFolderMenuOpenId(null);
+                                       onRenameFolder(f.id, f.name);
+                                     }}
+                                   >
+                                     Renomear
+                                   </button>
+                                   <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-red-200 hover:bg-red-500/10"
+                                     onClick={() => {
+                                       setFolderMenuOpenId(null);
+                                       onDeleteFolder(f.id, f.name);
+                                     }}
+                                   >
+                                     Apagar
+                                   </button>
+                                 </div>
+                               )}
+                             </div>
+
+                             {/* Overlay “Solte para mover” */}
+                             {isOver && (
+                               <div className="absolute inset-0 rounded-2xl bg-gold/10 border border-gold/30 flex items-center justify-center pointer-events-none">
+                                 <div className="text-sm font-semibold text-gold animate-pulse">
+                                   Solte para mover
+                                 </div>
+                               </div>
+                             )}
                            </div>
-                         </div>
-                       ))}
+                         );
+                       })}
 
                        {foldersFiltered.length === 0 && (
                          <div className="text-gray-500 text-sm mt-2">Nenhuma pasta encontrada.</div>
@@ -478,6 +540,7 @@ export const DashboardPage: React.FC = () => {
                         asset={asset}
                         onDeleted={refresh}
                         onDragStart={onDragStartAsset}
+                        onDragEnd={onDragEndAsset}
                         onMoveToRoot={
                           activeFolderId
                             ? async () => {
