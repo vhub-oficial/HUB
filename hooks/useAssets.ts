@@ -120,6 +120,23 @@ export function useAssets(args?: AssetsArgs) {
     });
   };
 
+  const sanitizeObjectKeyPart = (input: string) => {
+    // 1) remove acentos (diacríticos)
+    const noDiacritics = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // 2) troca espaços por hífen e remove chars perigosos
+    // permite: letras, números, ponto, hífen, underscore
+    const cleaned = noDiacritics
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/-+/g, '-') // colapsa hífens
+      .replace(/^-+|-+$/g, ''); // tira hífen no começo/fim
+
+    // 3) evita vazio e limita tamanho (suficiente para storage key)
+    const finalName = cleaned || 'file';
+    return finalName.slice(0, 160);
+  };
+
   const uploadAsset = useCallback(async (
     file: File,
     opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any; displayName: string }
@@ -130,7 +147,7 @@ export function useAssets(args?: AssetsArgs) {
     if (!opts.tags?.length) throw new Error('tags obrigatórias');
 
     const bucket = getOrgBucketName(organizationId);
-    const safeName = file.name.replace(/\s+/g, '-');
+    const safeName = sanitizeObjectKeyPart(file.name);
     const filename = `${Date.now()}-${safeName}`;
     const folderPath = opts.folderId ? `folders/${opts.folderId}` : 'root';
     const objectPath = `${folderPath}/${filename}`;
