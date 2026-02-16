@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
+import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -825,6 +826,16 @@ export const DashboardPage: React.FC = () => {
         }}
         title={type ? `Nova pasta em ${type.toUpperCase()}` : 'Nova pasta'}
       />
+
+
+      {type && (
+        <GlobalDropOverlay
+          categoryType={type}
+          folderId={activeFolderId ?? null}
+          enabled
+        />
+      )}
+
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">

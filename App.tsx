@@ -17,6 +17,8 @@ import { RequireRole } from './components/Guards/RequireRole';
 import { AdminPage } from './app/admin/page';
 import { Loader2 } from 'lucide-react';
 import { NewAssetModal } from './components/Assets/NewAssetModal';
+import { UploadQueueProvider } from './contexts/UploadQueueContext';
+import { UploadTray } from './components/Uploads/UploadTray';
 
 // Protected Route Wrapper
 const ProtectedLayout = () => {
@@ -68,7 +70,8 @@ const App: React.FC = () => {
     <AuthProvider>
       <HashRouter>
         <UIProvider>
-          <Routes>
+          <UploadQueueProvider>
+            <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/pending" element={<PendingAccessPage />} />
             <Route path="/invite/:token" element={<InviteAcceptPage />} />
@@ -94,7 +97,9 @@ const App: React.FC = () => {
             </Route>
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+            </Routes>
+            <UploadTray />
+          </UploadQueueProvider>
         </UIProvider>
       </HashRouter>
     </AuthProvider>
