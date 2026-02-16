@@ -11,6 +11,7 @@ import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBa
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
+import { InboxPanel } from '../../components/Inbox/InboxPanel';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -124,6 +125,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const [isBusyMove, setIsBusyMove] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
@@ -586,6 +588,16 @@ export const DashboardPage: React.FC = () => {
                          <option value="za">Z–A</option>
                        </select>
 
+                       {type && (
+                         <button
+                           className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
+                           onClick={() => setInboxOpen(true)}
+                           title="Inbox (uploads em lote para organizar)"
+                         >
+                           Inbox
+                         </button>
+                       )}
+
                        <button
                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
                          onClick={() => setNewFolderOpen(true)}
@@ -833,6 +845,14 @@ export const DashboardPage: React.FC = () => {
           categoryType={type}
           folderId={activeFolderId ?? null}
           enabled
+        />
+      )}
+
+      {type && (
+        <InboxPanel
+          open={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          categoryType={type}
         />
       )}
 
