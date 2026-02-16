@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
+import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -59,6 +60,20 @@ export const DashboardPage: React.FC = () => {
     setFilters({ tags: nextTags, meta: nextMeta });
   }, [location.search]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedIds(new Set());
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
   // Apply filters to URL (debounced)
   useEffect(() => {
     if (!type) return;
@@ -98,6 +113,20 @@ export const DashboardPage: React.FC = () => {
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [folderMenuOpenId, setFolderMenuOpenId] = useState<string | null>(null); // menu (...) no card
   const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false); // menu (...) dentro da pasta
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const toastTimer = useRef<any>(null);
+
+  const showToast = (t: { type: 'success' | 'error' | 'info'; text: string }) => {
+    setToast(t);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const [isBusyMove, setIsBusyMove] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const selectionMode = selectedIds.size > 0;
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
@@ -134,6 +163,38 @@ export const DashboardPage: React.FC = () => {
     return next;
   }, [foldersForCategory, q, foldersSort]);
 
+  const scopedList = scopedAssets;
+  const toggleSelect = (assetId: string, e: React.MouseEvent) => {
+    const idx = scopedList.findIndex((a) => a.id === assetId);
+    const isMeta = e.metaKey || e.ctrlKey;
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+
+      if (e.shiftKey && lastSelectedIndex !== null && idx >= 0) {
+        const a = Math.min(lastSelectedIndex, idx);
+        const b = Math.max(lastSelectedIndex, idx);
+        for (let i = a; i <= b; i++) next.add(scopedList[i].id);
+        return next;
+      }
+
+      if (isMeta) {
+        if (next.has(assetId)) next.delete(assetId);
+        else next.add(assetId);
+        return next;
+      }
+
+      if (next.size <= 1 && next.has(assetId)) {
+        return next;
+      }
+      next.clear();
+      next.add(assetId);
+      return next;
+    });
+
+    if (idx >= 0) setLastSelectedIndex(idx);
+  };
+
   const onDragStartAsset = (e: React.DragEvent, assetId: string) => {
     setDraggingAssetId(assetId);
     e.dataTransfer.effectAllowed = 'move';
@@ -160,8 +221,115 @@ export const DashboardPage: React.FC = () => {
     const assetId = getDraggedAssetId(e);
     if (!assetId) return;
 
-    await moveAssetToFolder(assetId, folderId);
-    refresh();
+    try {
+      setIsBusyMove(true);
+      await moveAssetToFolder(assetId, folderId);
+      refresh();
+      const fname = foldersFiltered.find((f) => f.id === folderId)?.name ?? 'pasta';
+      showToast({ type: 'success', text: `Movido para “${fname}”` });
+    } catch (err: any) {
+      showToast({ type: 'error', text: err?.message ?? 'Falha ao mover' });
+    } finally {
+      setIsBusyMove(false);
+    }
+  };
+
+  const handleDropToUnfiled = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const assetId = getDraggedAssetId(e);
+    if (!assetId) return;
+
+    try {
+      setIsBusyMove(true);
+      await moveAssetToFolder(assetId, null);
+      refresh();
+      showToast({ type: 'success', text: 'Movido para a raiz' });
+    } catch (err: any) {
+      showToast({ type: 'error', text: err?.message ?? 'Falha ao mover' });
+    } finally {
+      setIsBusyMove(false);
+    }
+  };
+
+  const downloadSelectedAsZip = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) throw new Error('Nada selecionado.');
+
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    for (const id of ids) {
+      const asset = scopedAssets.find((a) => a.id === id);
+      if (!asset) continue;
+
+      const filenameBase = (asset.name || 'download').toString().trim().slice(0, 120);
+      const safe = filenameBase.replace(/[\\/:*?"<>|]+/g, '-');
+
+      let urlToFetch = asset.url;
+
+      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
+      if (!isExternal) {
+        const bucket = getOrgBucketName(organizationId!);
+        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
+      } else {
+        urlToFetch = asset.meta?.download_url || asset.url;
+      }
+
+      const res = await fetch(urlToFetch);
+      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
+      const blob = await res.blob();
+
+      zip.file(safe, blob);
+    }
+
+    const out = await zip.generateAsync({ type: 'blob' });
+    const blobUrl = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `vhub-${type ?? 'assets'}-${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
+  };
+
+  const downloadCurrentFolderAsZip = async () => {
+    if (!activeFolderId) throw new Error('Nenhuma pasta ativa.');
+    const name = foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'pasta';
+
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    for (const asset of scopedAssets) {
+      const filenameBase = (asset.name || 'download').toString().trim().slice(0, 120);
+      const safe = filenameBase.replace(/[\\/:*?"<>|]+/g, '-');
+
+      let urlToFetch = asset.url;
+      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
+      if (!isExternal) {
+        const bucket = getOrgBucketName(organizationId!);
+        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
+      } else {
+        urlToFetch = asset.meta?.download_url || asset.url;
+      }
+
+      const res = await fetch(urlToFetch);
+      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
+      const blob = await res.blob();
+
+      zip.file(safe, blob);
+    }
+
+    const out = await zip.generateAsync({ type: 'blob' });
+    const blobUrl = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${name}-${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
 
   // renomear
@@ -372,6 +540,20 @@ export const DashboardPage: React.FC = () => {
                                      Renomear
                                    </button>
                                    <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+                                     onClick={async () => {
+                                       setBreadcrumbMenuOpen(false);
+                                       try {
+                                         await downloadCurrentFolderAsZip();
+                                         showToast({ type: 'success', text: 'Download da pasta iniciado (ZIP)' });
+                                       } catch (e: any) {
+                                         showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP da pasta' });
+                                       }
+                                     }}
+                                   >
+                                     Baixar pasta (ZIP)
+                                   </button>
+                                   <button
                                      className="w-full text-left px-3 py-2 rounded-lg text-red-200 hover:bg-red-500/10"
                                      onClick={() => {
                                        setBreadcrumbMenuOpen(false);
@@ -531,8 +713,72 @@ export const DashboardPage: React.FC = () => {
                    )}
                  </div>
 
+                 {selectedIds.size > 0 && (
+                   <div className="sticky top-3 z-30">
+                     <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-black/60 backdrop-blur px-4 py-3">
+                       <div className="text-sm text-gray-200">
+                         {selectedIds.size} selecionado(s)
+                       </div>
+
+                       <div className="flex items-center gap-2">
+                         <button
+                           className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-100 hover:border-gold/40"
+                           onClick={async () => {
+                             try {
+                               await downloadSelectedAsZip();
+                               showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
+                             } catch (e: any) {
+                               showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP' });
+                             }
+                           }}
+                         >
+                           Baixar (ZIP)
+                         </button>
+
+                         {activeFolderId && (
+                           <button
+                             className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-100 hover:border-gold/40"
+                             onClick={async () => {
+                               try {
+                                 setIsBusyMove(true);
+                                 const ids = Array.from(selectedIds);
+                                 await Promise.all(ids.map((id) => moveAssetToFolder(id, null)));
+                                 setSelectedIds(new Set());
+                                 refresh();
+                                 showToast({ type: 'success', text: 'Movido para a raiz' });
+                               } catch (e: any) {
+                                 showToast({ type: 'error', text: e?.message ?? 'Falha ao mover' });
+                               } finally {
+                                 setIsBusyMove(false);
+                               }
+                             }}
+                           >
+                             Mover p/ Raiz
+                           </button>
+                         )}
+
+                         <button
+                           className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-red-400/60"
+                           onClick={() => setSelectedIds(new Set())}
+                         >
+                           Limpar
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+                 )}
+
                  {/* Asset Grid */}
-                 <div className="mt-6">
+                 <div
+                   className="mt-6"
+                   onDragOver={(e) => {
+                     if (activeFolderId && draggingAssetId) e.preventDefault();
+                   }}
+                   onDrop={async (e) => {
+                     if (!activeFolderId) return;
+                     await handleDropToUnfiled(e);
+                   }}
+                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     {scopedAssets.map((asset) => (
                       <AssetCard
@@ -541,6 +787,9 @@ export const DashboardPage: React.FC = () => {
                         onDeleted={refresh}
                         onDragStart={onDragStartAsset}
                         onDragEnd={onDragEndAsset}
+                        selectionMode={selectionMode}
+                        selected={selectedIds.has(asset.id)}
+                        onToggleSelect={(id, e) => toggleSelect(id, e)}
                         onMoveToRoot={
                           activeFolderId
                             ? async () => {
@@ -576,6 +825,23 @@ export const DashboardPage: React.FC = () => {
         }}
         title={type ? `Nova pasta em ${type.toUpperCase()}` : 'Nova pasta'}
       />
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className={[
+              'px-4 py-3 rounded-xl border backdrop-blur bg-black/80',
+              toast.type === 'success'
+                ? 'border-gold/30 text-gray-100'
+                : toast.type === 'error'
+                  ? 'border-red-500/30 text-red-100'
+                  : 'border-border text-gray-200',
+            ].join(' ')}
+          >
+            {toast.text}
+          </div>
+        </div>
+      )}
 
     </div>
   );
