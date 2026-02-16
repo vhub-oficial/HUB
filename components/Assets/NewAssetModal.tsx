@@ -16,6 +16,12 @@ const CATEGORIES = [
   { key: 'ugc', label: 'Depoimentos UGC' },
 ];
 
+type UploadItem = {
+  file: File;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  error?: string | null;
+};
+
 function normalizeTags(input: string) {
   return input
     .split(',')
@@ -29,18 +35,22 @@ export const NewAssetModal: React.FC<{
   open: boolean;
   onClose: () => void;
   initialCategory: string | null;
+  initialFolderId?: string | null;
   onCreated?: () => void;
-}> = ({ open, onClose, initialCategory, onCreated }) => {
+}> = ({ open, onClose, initialCategory, initialFolderId: initialFolderIdProp, onCreated }) => {
   const { role } = useAuth();
   const { createAsset, uploadAsset } = useAssets();
+  const initialFolderId = initialFolderIdProp ?? null;
   const [category, setCategory] = React.useState<string | null>(initialCategory);
-  const [folderId] = React.useState<string | null>(null); // keep simple for now
+  const [folderId, setFolderId] = React.useState<string | null>(null);
   const [name, setName] = React.useState('');
   const [url, setUrl] = React.useState('');
   const [tagsText, setTagsText] = React.useState('');
   const [meta, setMeta] = React.useState<Record<string, any>>({});
   const [mode, setMode] = React.useState<'upload' | 'external'>('upload');
-  const [file, setFile] = React.useState<File | null>(null);
+  const [uploadItems, setUploadItems] = React.useState<UploadItem[]>([]);
+  const [uploading, setUploading] = React.useState(false);
+  const [progressText, setProgressText] = React.useState<string>('');
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -56,10 +66,21 @@ export const NewAssetModal: React.FC<{
   }, [category]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (files) => setFile(files?.[0] ?? null),
-    multiple: false,
+    multiple: true,
+    onDrop: (accepted: File[]) => {
+      if (!accepted?.length) return;
+      setUploadItems((prev) => {
+        const next = [...prev];
+        for (const f of accepted) {
+          const key = `${f.name}-${f.size}-${f.lastModified}`;
+          const exists = next.some((x) => `${x.file.name}-${x.file.size}-${x.file.lastModified}` === key);
+          if (!exists) next.push({ file: f, status: 'pending', error: null });
+        }
+        return next;
+      });
+    },
     accept: acceptByCategory,
-    disabled: busy || !(role === 'admin' || role === 'editor'),
+    disabled: busy || uploading || !(role === 'admin' || role === 'editor'),
   });
 
   React.useEffect(() => {
@@ -68,14 +89,24 @@ export const NewAssetModal: React.FC<{
     if (open) {
       setErr(null);
       setBusy(false);
-      setFile(null);
+      setUploading(false);
+      setUploadItems([]);
+      setProgressText('');
+      setFolderId(initialFolderId);
       setName('');
       setUrl('');
       setTagsText('');
       setMeta({});
       setMode('upload');
     }
-  }, [initialCategory, open]);
+  }, [initialCategory, initialFolderId, open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (initialFolderId) {
+      setFolderId((prev) => prev ?? initialFolderId);
+    }
+  }, [open, initialFolderId]);
 
   if (!open) return null;
 
@@ -87,7 +118,9 @@ export const NewAssetModal: React.FC<{
     if (!category) return setErr('Selecione uma categoria.');
     const tags = normalizeTags(tagsText);
     if (!tags.length) return setErr('Tags são obrigatórias.');
-    if (!name.trim()) return setErr('Nome do asset é obrigatório.');
+    if (mode === 'external' || (mode === 'upload' && uploadItems.length === 1)) {
+      if (!name.trim()) return setErr('Nome do asset é obrigatório.');
+    }
 
     setBusy(true);
     try {
@@ -106,24 +139,56 @@ export const NewAssetModal: React.FC<{
           url: trimmed,
           categoryType: category,
           tags,
-          folderId,
+          folderId: folderId ?? initialFolderId ?? null,
           meta: nextMeta,
         });
       } else {
-        if (!file) return setErr('Selecione um arquivo para upload.');
-        if (!name.trim()) return setErr('Nome do asset é obrigatório.');
-        await uploadAsset(file, {
-          folderId,
-          tags,
-          categoryType: category,
-          displayName: name.trim(),
-          meta: { ...meta, category, source: 'storage' },
-        });
+        if (!uploadItems.length) throw new Error('Selecione pelo menos 1 arquivo.');
+
+        setUploading(true);
+        try {
+          for (let i = 0; i < uploadItems.length; i++) {
+            const item = uploadItems[i];
+            setProgressText(`Enviando ${i + 1}/${uploadItems.length}: ${item.file.name}`);
+
+            setUploadItems((prev) =>
+              prev.map((x) => (x.file === item.file ? { ...x, status: 'uploading', error: null } : x)),
+            );
+
+            try {
+              await uploadAsset(item.file, {
+                folderId: folderId ?? initialFolderId ?? null,
+                tags,
+                categoryType: category,
+                displayName: uploadItems.length === 1 ? name.trim() : item.file.name,
+                meta: { ...meta, category, source: 'storage' },
+              });
+
+              setUploadItems((prev) =>
+                prev.map((x) => (x.file === item.file ? { ...x, status: 'done', error: null } : x)),
+              );
+            } catch (e: any) {
+              setUploadItems((prev) =>
+                prev.map((x) =>
+                  x.file === item.file ? { ...x, status: 'error', error: e?.message ?? 'Falha no upload' } : x,
+                ),
+              );
+            }
+          }
+
+          window.dispatchEvent(new Event('vah:assets_changed'));
+          onCreated?.();
+          setProgressText('');
+          onClose();
+        } finally {
+          setUploading(false);
+        }
       }
-      onCreated?.();
-      // ✅ notify all pages to refresh lists immediately
-      window.dispatchEvent(new Event('vah:assets_changed'));
-      onClose();
+      if (mode === 'external') {
+        onCreated?.();
+        window.dispatchEvent(new Event('vah:assets_changed'));
+        onClose();
+      }
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao criar asset');
     } finally {
@@ -309,17 +374,47 @@ export const NewAssetModal: React.FC<{
                   className={[
                     "rounded-xl border border-dashed p-5 text-center transition-colors",
                     isDragActive ? "border-gold/50 bg-gold/5" : "border-border bg-black/20",
-                    (!canCreate || busy) ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-gold/40"
+                    (!canCreate || busy || uploading) ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-gold/40"
                   ].join(' ')}
                 >
                   <input {...getInputProps()} />
                   <div className="text-white font-medium">
-                    {file ? `Arquivo: ${file.name}` : (isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte aqui')}
+                    {isDragActive ? 'Solte os arquivos aqui…' : 'Arraste e solte arquivos aqui'}
                   </div>
                   <div className="text-gray-400 text-sm mt-1">
                     (drag & drop)
                   </div>
                 </div>
+
+                {uploadItems.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {uploadItems.map((it, idx) => (
+                      <div key={`${it.file.name}-${it.file.size}-${it.file.lastModified}`} className="flex items-center justify-between gap-3 border border-border rounded-xl px-3 py-2 bg-black/20">
+                        <div className="min-w-0">
+                          <div className="text-sm text-white truncate">{it.file.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {it.status === 'pending' && 'Pendente'}
+                            {it.status === 'uploading' && 'Enviando…'}
+                            {it.status === 'done' && 'Concluído'}
+                            {it.status === 'error' && `Erro: ${it.error ?? 'Falha'}`}
+                          </div>
+                        </div>
+
+                        {!uploading && (
+                          <button
+                            className="text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-red-400/60"
+                            onClick={() => setUploadItems((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {progressText && (
+                  <div className="mt-3 text-xs text-gray-400">{progressText}</div>
+                )}
               </div>
             )}
             {renderCategoryFields()}
@@ -339,7 +434,7 @@ export const NewAssetModal: React.FC<{
             Cancelar
           </button>
           <button
-            disabled={busy}
+            disabled={busy || uploading}
             onClick={save}
             className="px-5 py-2 rounded-xl bg-gold text-black font-semibold hover:opacity-90 disabled:opacity-60"
           >
