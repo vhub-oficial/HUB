@@ -12,6 +12,9 @@ type Props = {
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
   onDragEnd?: () => void;
   onMoveToRoot?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (assetId: string, e: React.MouseEvent) => void;
 };
 
 const isExternal = (asset: AssetRow) => {
@@ -52,7 +55,16 @@ const buildDownloadName = (asset: AssetRow) => {
   return `${base}${ext}`;
 };
 
-export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart, onDragEnd, onMoveToRoot }) => {
+export const AssetCard: React.FC<Props> = ({
+  asset,
+  onDeleted,
+  onDragStart,
+  onDragEnd,
+  onMoveToRoot,
+  selectionMode,
+  selected,
+  onToggleSelect,
+}) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
@@ -124,10 +136,30 @@ export const AssetCard: React.FC<Props> = ({ asset, onDeleted, onDragStart, onDr
       onDragEnd={() => {
         if (onDragEnd) onDragEnd();
       }}
-      onClick={() => navigate(`/assets/${asset.id}`)}
-      className="group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative"
+      onClick={(e) => {
+        if (selectionMode && onToggleSelect) {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleSelect(asset.id, e as any);
+          return;
+        }
+        navigate(`/assets/${asset.id}`);
+      }}
+      className={`group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative ${selected ? 'ring-2 ring-gold/30 border-gold/60' : ''}`}
     >
       {/* Quick actions */}
+      {selectionMode && (
+        <div className="absolute top-2 left-2 z-10">
+          <div
+            className={[
+              'w-6 h-6 rounded-md border flex items-center justify-center',
+              selected ? 'bg-gold/20 border-gold/50' : 'bg-black/40 border-border',
+            ].join(' ')}
+          >
+            {selected ? <span className="text-gold text-sm">✓</span> : null}
+          </div>
+        </div>
+      )}
       <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
