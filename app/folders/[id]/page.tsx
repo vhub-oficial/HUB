@@ -132,6 +132,7 @@ export const FolderPage: React.FC = () => {
         open={openNew}
         onClose={() => setOpenNew(false)}
         initialCategory={type}
+        initialFolderId={id}
         onCreated={() => refresh()}
       />
 

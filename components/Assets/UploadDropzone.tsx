@@ -42,19 +42,20 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
       setErr('Adicione pelo menos 1 tag (separada por vírgula) antes de enviar.');
       return;
     }
-    const file = acceptedFiles?.[0];
-    if (!file) return;
+    if (!acceptedFiles?.length) return;
 
     setBusy(true);
     try {
-      await uploadAsset(file, {
-        folderId,
-        tags: normalizedTags,
-        categoryType,
-        meta: { source: 'storage' },
-      });
+      for (const file of acceptedFiles) {
+        await uploadAsset(file, {
+          folderId: folderId ?? null,
+          tags: normalizedTags,
+          categoryType,
+          meta: { source: 'storage' },
+        });
+      }
       setOk('Upload concluído!');
-      // give backend a beat; then refresh list
+      window.dispatchEvent(new Event('vah:assets_changed'));
       setTimeout(() => onUploaded?.(), 300);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro no upload');
@@ -65,7 +66,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    multiple: false,
+    multiple: true,
     accept: { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] },
     disabled: busy || !canUpload,
   });
@@ -82,7 +83,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
       </div>
 
       <p className="text-gray-400 text-sm mt-2">
-        Arraste e solte um vídeo. Tags obrigatórias (separe por vírgula).
+        Arraste e solte vídeos. Tags obrigatórias (separe por vírgula).
       </p>
 
       <div className="mt-4">

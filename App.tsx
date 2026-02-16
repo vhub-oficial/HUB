@@ -21,7 +21,7 @@ import { NewAssetModal } from './components/Assets/NewAssetModal';
 // Protected Route Wrapper
 const ProtectedLayout = () => {
   const { profile, loading, user, needsProvisioning, isBlocked } = useAuth();
-  const { newAssetOpen, initialCategory, closeNewAsset } = useUI();
+  const { newAssetOpen, initialCategory, initialFolderId, closeNewAsset } = useUI();
 
   if (loading) {
     return (
@@ -57,6 +57,7 @@ const ProtectedLayout = () => {
         open={newAssetOpen}
         onClose={closeNewAsset}
         initialCategory={initialCategory}
+        initialFolderId={initialFolderId}
       />
     </div>
   );

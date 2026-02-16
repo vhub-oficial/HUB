@@ -59,7 +59,7 @@ export const Topbar: React.FC = () => {
         <div className="flex items-center space-x-4">
           {profile?.role !== 'viewer' && (
             <Button
-              onClick={() => openNewAsset(type ? type.toLowerCase() : null)}
+              onClick={() => openNewAsset(type ? type.toLowerCase() : null, null)}
               className="bg-gold hover:bg-gold/90 text-black font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
             >
               <Plus size={18} />
