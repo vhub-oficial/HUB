@@ -66,18 +66,11 @@ export const NewAssetModal: React.FC<{
   }, [category]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    multiple: true,
+    multiple: false,
     onDrop: (accepted: File[]) => {
       if (!accepted?.length) return;
-      setUploadItems((prev) => {
-        const next = [...prev];
-        for (const f of accepted) {
-          const key = `${f.name}-${f.size}-${f.lastModified}`;
-          const exists = next.some((x) => `${x.file.name}-${x.file.size}-${x.file.lastModified}` === key);
-          if (!exists) next.push({ file: f, status: 'pending', error: null });
-        }
-        return next;
-      });
+      const file = accepted[0];
+      setUploadItems([{ file, status: 'pending', error: null }]);
     },
     accept: acceptByCategory,
     disabled: busy || uploading || !(role === 'admin' || role === 'editor'),
@@ -118,9 +111,7 @@ export const NewAssetModal: React.FC<{
     if (!category) return setErr('Selecione uma categoria.');
     const tags = normalizeTags(tagsText);
     if (!tags.length) return setErr('Tags são obrigatórias.');
-    if (mode === 'external' || (mode === 'upload' && uploadItems.length === 1)) {
-      if (!name.trim()) return setErr('Nome do asset é obrigatório.');
-    }
+    if (!name.trim()) return setErr('Nome do asset é obrigatório.');
 
     setBusy(true);
     try {
@@ -145,41 +136,40 @@ export const NewAssetModal: React.FC<{
       } else {
         if (!uploadItems.length) throw new Error('Selecione pelo menos 1 arquivo.');
 
+        const item = uploadItems[0];
+        if (!item) throw new Error('Selecione um arquivo.');
+
         setUploading(true);
         try {
-          for (let i = 0; i < uploadItems.length; i++) {
-            const item = uploadItems[i];
-            setProgressText(`Enviando ${i + 1}/${uploadItems.length}: ${item.file.name}`);
+          setProgressText(`Enviando: ${item.file.name}`);
 
-            setUploadItems((prev) =>
-              prev.map((x) => (x.file === item.file ? { ...x, status: 'uploading', error: null } : x)),
-            );
+          setUploadItems((prev) =>
+            prev.map((x) => (x.file === item.file ? { ...x, status: 'uploading', error: null } : x)),
+          );
 
-            try {
-              await uploadAsset(item.file, {
-                folderId: folderId ?? initialFolderId ?? null,
-                tags,
-                categoryType: category,
-                displayName: uploadItems.length === 1 ? name.trim() : item.file.name,
-                meta: { ...meta, category, source: 'storage' },
-              });
+          await uploadAsset(item.file, {
+            folderId: folderId ?? initialFolderId ?? null,
+            tags,
+            categoryType: category,
+            displayName: name.trim(),
+            meta: { ...meta, category, source: 'storage' },
+          });
 
-              setUploadItems((prev) =>
-                prev.map((x) => (x.file === item.file ? { ...x, status: 'done', error: null } : x)),
-              );
-            } catch (e: any) {
-              setUploadItems((prev) =>
-                prev.map((x) =>
-                  x.file === item.file ? { ...x, status: 'error', error: e?.message ?? 'Falha no upload' } : x,
-                ),
-              );
-            }
-          }
+          setUploadItems((prev) =>
+            prev.map((x) => (x.file === item.file ? { ...x, status: 'done', error: null } : x)),
+          );
 
           window.dispatchEvent(new Event('vah:assets_changed'));
           onCreated?.();
           setProgressText('');
           onClose();
+        } catch (e: any) {
+          setUploadItems((prev) =>
+            prev.map((x) =>
+              x.file === item.file ? { ...x, status: 'error', error: e?.message ?? 'Falha no upload' } : x,
+            ),
+          );
+          throw e;
         } finally {
           setUploading(false);
         }
@@ -379,7 +369,7 @@ export const NewAssetModal: React.FC<{
                 >
                   <input {...getInputProps()} />
                   <div className="text-white font-medium">
-                    {isDragActive ? 'Solte os arquivos aqui…' : 'Arraste e solte arquivos aqui'}
+                    {isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte um arquivo aqui'}
                   </div>
                   <div className="text-gray-400 text-sm mt-1">
                     (drag & drop)
