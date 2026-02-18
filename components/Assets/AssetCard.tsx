@@ -10,7 +10,6 @@ type Props = {
   asset: AssetRow;
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
-  onMoveToRoot?: () => void;
 
   // ✅ Drive selection
   selected?: boolean;
@@ -59,7 +58,6 @@ export const AssetCard: React.FC<Props> = ({
   asset,
   onDeleted,
   onDragStart,
-  onMoveToRoot,
   selected = false,
   selectionMode = false,
   onToggleSelect,
@@ -176,20 +174,6 @@ export const AssetCard: React.FC<Props> = ({
             title="Editar"
           >
             <Pencil size={16} />
-          </button>
-        )}
-
-        {onMoveToRoot && (
-          <button
-            className="px-3 py-1 rounded-md bg-black/50 border border-border text-white hover:border-gold/40 transition-colors"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onMoveToRoot();
-            }}
-            title="Mover para a raiz (sem pasta)"
-          >
-            Raiz
           </button>
         )}
 

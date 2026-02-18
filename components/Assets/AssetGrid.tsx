@@ -12,7 +12,6 @@ type Props = {
 
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
-  onMoveToRoot?: (assetId: string) => void;
 };
 
 function rectIntersects(a: DOMRect, b: DOMRect) {
@@ -27,7 +26,6 @@ export const AssetGrid: React.FC<Props> = ({
   onMarqueeSelect,
   onDeleted,
   onDragStart,
-  onMoveToRoot,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -157,8 +155,18 @@ export const AssetGrid: React.FC<Props> = ({
             <AssetCard
               asset={asset}
               onDeleted={onDeleted}
-              onDragStart={onDragStart}
-              onMoveToRoot={onMoveToRoot ? () => onMoveToRoot(asset.id) : undefined}
+              onDragStart={(e, assetId) => {
+                const selected = selectedIds.has(assetId);
+                const ids = selected ? Array.from(selectedIds) : [assetId];
+
+                // ✅ multi payload
+                e.dataTransfer.setData('application/x-vhub-asset-ids', JSON.stringify(ids));
+                // ✅ legacy fallback
+                e.dataTransfer.setData('application/x-vhub-asset-id', assetId);
+                e.dataTransfer.setData('text/plain', ids.join(','));
+
+                onDragStart?.(e, assetId);
+              }}
               selected={selectedIds.has(asset.id)}
               selectionMode={selectionMode}
               onToggleSelect={onToggleSelect}
