@@ -11,8 +11,8 @@ type Props = {
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
 
-  // ✅ Drive selection
   selected?: boolean;
+  selectedIds?: string[];
   selectionMode?: boolean;
   onToggleSelect?: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
 };
@@ -59,6 +59,7 @@ export const AssetCard: React.FC<Props> = ({
   onDeleted,
   onDragStart,
   selected = false,
+  selectedIds,
   selectionMode = false,
   onToggleSelect,
 }) => {
@@ -138,8 +139,15 @@ export const AssetCard: React.FC<Props> = ({
     <button
       draggable
       onDragStart={(e) => {
+        const ids =
+          selectedIds && selectedIds.length > 0
+            ? (selectedIds.includes(asset.id) ? selectedIds : [asset.id])
+            : [asset.id];
+
+        e.dataTransfer.setData('application/x-vhub-asset-ids', JSON.stringify(ids));
         e.dataTransfer.setData('application/x-vhub-asset-id', asset.id);
         e.dataTransfer.setData('text/plain', asset.id);
+
         if (onDragStart) onDragStart(e, asset.id);
       }}
       onClick={handleCardClick}

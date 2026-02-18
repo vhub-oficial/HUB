@@ -155,19 +155,9 @@ export const AssetGrid: React.FC<Props> = ({
             <AssetCard
               asset={asset}
               onDeleted={onDeleted}
-              onDragStart={(e, assetId) => {
-                const selected = selectedIds.has(assetId);
-                const ids = selected ? Array.from(selectedIds) : [assetId];
-
-                // ✅ multi payload
-                e.dataTransfer.setData('application/x-vhub-asset-ids', JSON.stringify(ids));
-                // ✅ legacy fallback
-                e.dataTransfer.setData('application/x-vhub-asset-id', assetId);
-                e.dataTransfer.setData('text/plain', ids.join(','));
-
-                onDragStart?.(e, assetId);
-              }}
+              onDragStart={onDragStart}
               selected={selectedIds.has(asset.id)}
+              selectedIds={Array.from(selectedIds)}
               selectionMode={selectionMode}
               onToggleSelect={onToggleSelect}
             />
