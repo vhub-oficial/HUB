@@ -9,13 +9,13 @@ type Options = {
 
 const SPEC_META_KEYS: Record<string, string[]> = {
   deepfakes: ['personagem', 'versao'],
-  vozes: ['duracao'],
+  vozes: [],
   tiktok: ['nicho', 'genero', 'tipo'],
   musicas: ['momento_vsl', 'emocao'],
   sfx: ['momento_vsl', 'emocao'],
   veo3: ['produto', 'dimensao'],
   'provas-sociais': ['nicho', 'genero'],
-  ugc: ['genero_ator', 'faixa_etaria', 'duracao'],
+  ugc: ['genero_ator', 'faixa_etaria'],
 };
 
 export function useFilterOptions(type?: string) {
