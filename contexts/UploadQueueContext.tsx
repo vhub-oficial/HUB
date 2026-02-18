@@ -35,6 +35,8 @@ const genId = () => {
   return `uq_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 };
 
+const fileFingerprint = (f: File) => `${f.name}::${f.size}::${f.lastModified}`;
+
 export function UploadQueueProvider({ children }: { children: React.ReactNode }) {
   const { role } = useAuth();
   const { uploadAsset } = useAssets();
@@ -60,14 +62,20 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     }
 
     setItems((prev) => {
+      const existing = new Set(
+        prev
+          .filter((x) => x.status === 'queued' || x.status === 'uploading')
+          .map((x) => fileFingerprint(x.file)),
+      );
+
+      const localSeen = new Set<string>();
       const next = [...prev];
+
       for (const f of files) {
-        const key = `${f.name}-${f.size}-${f.lastModified}-${opts.categoryType}-${opts.folderId ?? 'root'}`;
-        const exists = next.some(
-          (x) =>
-            `${x.file.name}-${x.file.size}-${x.file.lastModified}-${x.categoryType}-${x.folderId ?? 'root'}` === key
-        );
-        if (exists) continue;
+        const fp = fileFingerprint(f);
+        if (existing.has(fp)) continue;
+        if (localSeen.has(fp)) continue;
+        localSeen.add(fp);
 
         next.push({
           id: genId(),
