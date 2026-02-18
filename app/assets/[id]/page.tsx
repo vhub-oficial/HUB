@@ -4,6 +4,7 @@ import { useAssets, type AssetRow } from '../../../hooks/useAssets';
 import { useAuth } from '../../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../../lib/storageHelpers';
 import { ArrowLeft, ExternalLink, Trash2, Save, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCategoryMetaFields } from '../../../lib/categoryMeta';
 
 const isExternal = (asset: AssetRow) => {
   const source = asset.meta?.source;
@@ -41,7 +42,7 @@ export const AssetDetailPage: React.FC = () => {
   const [tagsText, setTagsText] = React.useState('');
   const [url, setUrl] = React.useState('');
   const [metaJson, setMetaJson] = React.useState('');
-  const [metaForm, setMetaForm] = React.useState<Record<string, string>>({});
+  const [metaDraft, setMetaDraft] = React.useState<Record<string, any>>({});
   const [showTech, setShowTech] = React.useState(false);
 
   const canEdit = role === 'admin' || role === 'editor';
@@ -99,21 +100,7 @@ export const AssetDetailPage: React.FC = () => {
 
   React.useEffect(() => {
     if (!asset) return;
-    const m = (asset.meta ?? {}) as any;
-
-    setMetaForm({
-      produto: m.produto ?? '',
-      dimensao: m.dimensao ?? '',
-      versao: m.versao ?? '',
-      personagem: m.personagem ?? '',
-      nicho: m.nicho ?? '',
-      genero: m.genero ?? '',
-      tipo: m.tipo ?? '',
-      momento_vsl: m.momento_vsl ?? '',
-      emocao: m.emocao ?? '',
-      faixa_etaria: m.faixa_etaria ?? '',
-      genero_ator: m.genero_ator ?? '',
-    });
+    setMetaDraft((asset.meta && typeof asset.meta === 'object' ? asset.meta : {}) as Record<string, any>);
   }, [asset?.id]);
 
   const onSave = async () => {
@@ -131,19 +118,12 @@ export const AssetDetailPage: React.FC = () => {
       const nextMeta = {
         ...(asset.meta ?? {}),
         ...parsedMeta,
-        ...Object.fromEntries(
-          Object.entries(metaForm)
-            .map(([k, v]) => [k, (v ?? '').trim()])
-            .filter(([_, v]) => v !== '')
-        ),
+        ...(metaDraft ?? {}),
       } as Record<string, any>;
 
       Object.keys(nextMeta).forEach((k) => {
         if (typeof nextMeta[k] === 'string' && nextMeta[k].trim() === '') delete nextMeta[k];
       });
-
-      // ✅ remover chaves vazias e também garantir que duracao não exista
-      delete (nextMeta as any).duracao;
 
       // prevent changing url for storage assets
       const nextPatch: Partial<AssetRow> = {
@@ -195,27 +175,10 @@ export const AssetDetailPage: React.FC = () => {
   }
 
   const external = isExternal(asset);
-  const meta = asset.meta ?? {};
+  const type = (asset?.type ?? '').toLowerCase();
+  const metaFields = getCategoryMetaFields(type);
 
-  // Pretty fields per category (MVP)
-  const prettyFields: Array<{ label: string; value: string }> = [];
-  const push = (label: string, value?: any) => {
-    if (value === undefined || value === null || String(value).trim() === '') return;
-    prettyFields.push({ label, value: String(value) });
-  };
-
-  // Common-ish
-  push('Versão', meta.versao);
-  push('Personagem', meta.personagem);
-  push('Produto', meta.produto);
-  push('Dimensão', meta.dimensao);
-  push('Nicho', meta.nicho);
-  push('Gênero', meta.genero);
-  push('Tipo', meta.tipo);
-  push('Momento VSL', meta.momento_vsl);
-  push('Emoção/Vibe', meta.emocao);
-  push('Faixa etária', meta.faixa_etaria);
-  push('Gênero do ator', meta.genero_ator);
+  const getMeta = (k: string) => (asset?.meta && typeof asset.meta === 'object' ? (asset.meta as any)[k] : undefined);
 
   return (
     <div className="p-6 space-y-6">
@@ -279,7 +242,7 @@ export const AssetDetailPage: React.FC = () => {
           </div>
 
           <div className="aspect-video bg-black/60 flex items-center justify-center p-4">
-            {meta?.source === 'external' ? (
+            {asset.meta?.source === 'external' ? (
               isExternalEmbed && previewUrl ? (
                 <div className="w-full aspect-video rounded-2xl overflow-hidden border border-border bg-black/30">
                   <iframe
@@ -365,46 +328,36 @@ export const AssetDetailPage: React.FC = () => {
             </div>
           )}
 
-          {editing && (
+          {editing && metaFields.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {[
-                ['produto', 'Produto'],
-                ['dimensao', 'Dimensão'],
-                ['personagem', 'Personagem'],
-                ['versao', 'Versão'],
-                ['nicho', 'Nicho'],
-                ['genero', 'Gênero'],
-                ['tipo', 'Tipo'],
-                ['momento_vsl', 'Momento VSL'],
-                ['emocao', 'Emoção'],
-                ['faixa_etaria', 'Faixa etária'],
-                ['genero_ator', 'Gênero do ator'],
-              ].map(([k, label]) => (
-                <div className="space-y-1" key={k}>
-                  <div className="text-xs text-gray-400">{label}</div>
+              {metaFields.map((f) => (
+                <div key={f.key}>
+                  <div className="text-xs text-gray-400 mb-1">{f.label}</div>
                   <input
-                    className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                    value={metaForm[k] ?? ''}
-                    onChange={(e) => setMetaForm((p) => ({ ...p, [k]: e.target.value }))}
-                    placeholder={label}
+                    className="w-full bg-black/30 border border-border rounded-lg px-3 py-2 text-white"
+                    placeholder={f.placeholder || f.label}
+                    value={(metaDraft?.[f.key] ?? '') as string}
+                    onChange={(e) => setMetaDraft((prev: any) => ({ ...(prev ?? {}), [f.key]: e.target.value }))}
                   />
                 </div>
               ))}
             </div>
           )}
 
-          {/* Pretty meta */}
-          {prettyFields.length > 0 && (
-            <div>
-              <div className="text-xs text-gray-500">Detalhes</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {prettyFields.map((f) => (
-                  <div key={f.label} className="px-3 py-2 rounded-xl bg-black/30 border border-border">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">{f.label}</div>
-                    <div className="text-sm text-white">{f.value}</div>
+          {!editing && metaFields.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {metaFields.map((f) => {
+                const v = getMeta(f.key);
+                if (!v) return null;
+                return (
+                  <div key={f.key}>
+                    <div className="text-xs text-gray-400 mb-1">{f.label}</div>
+                    <div className="bg-black/20 border border-border rounded-lg px-3 py-2 text-white">
+                      {String(v)}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           )}
 

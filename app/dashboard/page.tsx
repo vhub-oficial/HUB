@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
-import { useFolders } from '../../hooks/useFolders';
+import { useFolders, type FolderRow } from '../../hooks/useFolders';
 import { NewFolderModal } from '../../components/Folders/NewFolderModal';
 import { AssetGrid } from '../../components/Assets/AssetGrid';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
@@ -113,7 +113,7 @@ export const DashboardPage: React.FC = () => {
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [folderMenuOpenId, setFolderMenuOpenId] = useState<string | null>(null); // menu (...) no card
-  const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false); // menu (...) dentro da pasta
+  const [breadcrumb, setBreadcrumb] = useState<FolderRow[]>([]);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const toastTimer = useRef<any>(null);
 
@@ -149,6 +149,7 @@ export const DashboardPage: React.FC = () => {
     renameFolder,
     deleteFolder,
     refresh: refreshFolders,
+    getBreadcrumb,
   } = useFolders({ parentId: null, type: type ?? null, sort: folderSortForHook });
   const [newFolderOpen, setNewFolderOpen] = useState(false);
 
@@ -164,6 +165,24 @@ export const DashboardPage: React.FC = () => {
     if (foldersSort === 'za') next = [...next].reverse();
     return next;
   }, [foldersForCategory, q, foldersSort]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      if (!activeFolderId) {
+        if (mounted) setBreadcrumb([]);
+        return;
+      }
+
+      const chain = await getBreadcrumb(activeFolderId);
+      if (mounted) setBreadcrumb(chain);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeFolderId, getBreadcrumb]);
 
   const scopedIdToIndex = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -255,75 +274,47 @@ export const DashboardPage: React.FC = () => {
 
 
   const getDraggedAssetIds = (e: React.DragEvent): string[] => {
-    // ✅ Prefer multi payload
-    const rawMulti = e.dataTransfer.getData('application/x-vhub-asset-ids');
-    if (rawMulti) {
+    const rawList = e.dataTransfer.getData('application/x-vhub-asset-ids');
+    if (rawList) {
       try {
-        const parsed = JSON.parse(rawMulti);
-        if (Array.isArray(parsed)) {
-          return parsed.map((x) => String(x).trim()).filter(Boolean);
-        }
-      } catch {
-        // ignore
-      }
+        const ids = JSON.parse(rawList);
+        if (Array.isArray(ids)) return ids.map(String).filter(Boolean);
+      } catch {}
     }
 
-    // ✅ Fallback to single id
     const single =
-      (e.dataTransfer.getData('application/x-vhub-asset-id') ||
-        e.dataTransfer.getData('text/plain') ||
-        '').trim();
+      e.dataTransfer.getData('application/x-vhub-asset-id') ||
+      e.dataTransfer.getData('text/plain') ||
+      '';
 
-    if (!single) return [];
-
-    // If text/plain contains CSV from our drag fallback
-    if (single.includes(',')) {
-      return single.split(',').map((s) => s.trim()).filter(Boolean);
-    }
-
-    return [single];
+    return single.trim() ? [single.trim()] : [];
   };
 
-  // drop em uma pasta
-  const handleDropOnFolder = async (folderId: string, e: React.DragEvent) => {
+  // drop em uma pasta (ou raiz com folderId = null)
+  const handleDropOnFolder = async (folderId: string | null, e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const assetIds = getDraggedAssetIds(e);
-    if (!assetIds.length) return;
+
+    const ids = getDraggedAssetIds(e);
+    if (!ids.length) return;
 
     try {
       setIsBusyMove(true);
 
-      // ✅ Move sequencial para evitar rate-limit/overload
-      for (const id of assetIds) {
+      for (const id of ids) {
         // eslint-disable-next-line no-await-in-loop
         await moveAssetToFolder(id, folderId);
       }
 
       refresh();
-      const fname = foldersFiltered.find((f) => f.id === folderId)?.name ?? 'pasta';
-      showToast({ type: 'success', text: `Movido para “${fname}”` });
-    } catch (err: any) {
-      showToast({ type: 'error', text: err?.message ?? 'Falha ao mover' });
-    } finally {
-      setIsBusyMove(false);
-    }
-  };
-
-  const handleDropToUnfiled = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const assetIds = getDraggedAssetIds(e);
-    if (!assetIds.length) return;
-
-    try {
-      setIsBusyMove(true);
-      for (const id of assetIds) {
-        // eslint-disable-next-line no-await-in-loop
-        await moveAssetToFolder(id, null);
+      setSelectedIds(new Set());
+      setAnchorIndex(null);
+      if (folderId) {
+        const fname = foldersFiltered.find((f) => f.id === folderId)?.name ?? 'pasta';
+        showToast({ type: 'success', text: `Movido para “${fname}”` });
+      } else {
+        showToast({ type: 'success', text: 'Movido para a raiz' });
       }
-      refresh();
-      showToast({ type: 'success', text: 'Movido para a raiz' });
     } catch (err: any) {
       showToast({ type: 'error', text: err?.message ?? 'Falha ao mover' });
     } finally {
@@ -373,44 +364,6 @@ export const DashboardPage: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
 
-  const downloadCurrentFolderAsZip = async () => {
-    if (!activeFolderId) throw new Error('Nenhuma pasta ativa.');
-    const name = foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'pasta';
-
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
-
-    for (const asset of scopedAssets) {
-      const filenameBase = (asset.name || 'download').toString().trim().slice(0, 120);
-      const safe = filenameBase.replace(/[\\/:*?"<>|]+/g, '-');
-
-      let urlToFetch = asset.url;
-      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
-      if (!isExternal) {
-        const bucket = getOrgBucketName(organizationId!);
-        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
-      } else {
-        urlToFetch = asset.meta?.download_url || asset.url;
-      }
-
-      const res = await fetch(urlToFetch);
-      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
-      const blob = await res.blob();
-
-      zip.file(safe, blob);
-    }
-
-    const out = await zip.generateAsync({ type: 'blob' });
-    const blobUrl = URL.createObjectURL(out);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `${name}-${Date.now()}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
-  };
-
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
     const next = window.prompt('Renomear pasta:', currentName);
@@ -439,7 +392,6 @@ export const DashboardPage: React.FC = () => {
     await deleteFolder(folderId);
 
     if (activeFolderId === folderId) {
-      setBreadcrumbMenuOpen(false);
       setFolderMenuOpenId(null);
       setActiveFolderId(null);
     }
@@ -574,78 +526,32 @@ export const DashboardPage: React.FC = () => {
                    {/* Top row: breadcrumb (somente quando dentro da pasta) + controles à direita */}
                    <div className="flex items-center justify-between gap-3">
                      <div className="min-h-[40px] flex items-center">
-                       {activeFolderId ? (
-                         <div className="flex items-center gap-2">
-                           {/* Chip da categoria (volta para raiz da categoria) */}
+                       {type ? (
+                         <div className="mt-3 flex items-center gap-2 flex-wrap">
                            <button
-                             className="text-sm text-gray-200 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
-                             onClick={() => {
-                               setActiveFolderId(null);
-                               setBreadcrumbMenuOpen(false);
-                             }}
-                             title="Voltar para a raiz"
+                             className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
+                             onClick={() => setActiveFolderId(null)}
+                             onDragOver={(e) => e.preventDefault()}
+                             onDrop={(e) => handleDropOnFolder(null, e)}
+                             title="Raiz da categoria"
                            >
-                             {type ? type.toUpperCase() : 'RAIZ'}
+                             {(type ?? 'RAIZ').toUpperCase()}
                            </button>
 
-                           <span className="text-gray-500 text-sm">/</span>
-
-                           {/* Chip da pasta atual (Drive-style) */}
-                           <div className="flex items-center gap-2">
-                             <div className="text-sm text-gray-100 bg-black/20 border border-border rounded-lg px-3 py-1">
-                               {foldersFiltered.find((f) => f.id === activeFolderId)?.name ?? 'Pasta'}
-                             </div>
-
-                             {/* Menu (...) de ações da pasta atual */}
-                             <div className="relative">
+                           {breadcrumb.map((node) => (
+                             <div key={node.id} className="flex items-center gap-2">
+                               <span className="text-gray-500 text-sm">/</span>
                                <button
-                                 className="w-9 h-9 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
-                                 onClick={() => setBreadcrumbMenuOpen((v) => !v)}
-                                 title="Ações da pasta"
+                                 className="text-sm text-gray-200 hover:text-white border border-border bg-black/20 rounded-lg px-3 py-1 hover:border-gold/30"
+                                 onClick={() => setActiveFolderId(node.id)}
+                                 onDragOver={(e) => e.preventDefault()}
+                                 onDrop={(e) => handleDropOnFolder(node.id, e)}
+                                 title="Abrir pasta"
                                >
-                                 …
+                                 {node.name}
                                </button>
-
-                               {breadcrumbMenuOpen && (
-                                 <div className="absolute z-20 mt-2 w-44 rounded-xl border border-border bg-black/90 backdrop-blur p-2">
-                                   <button
-                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-                                     onClick={() => {
-                                       setBreadcrumbMenuOpen(false);
-                                       const f = foldersFiltered.find((x) => x.id === activeFolderId);
-                                       if (f) onRenameFolder(f.id, f.name);
-                                     }}
-                                   >
-                                     Renomear
-                                   </button>
-                                   <button
-                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-                                     onClick={async () => {
-                                       setBreadcrumbMenuOpen(false);
-                                       try {
-                                         await downloadCurrentFolderAsZip();
-                                         showToast({ type: 'success', text: 'Download da pasta iniciado (ZIP)' });
-                                       } catch (e: any) {
-                                         showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP da pasta' });
-                                       }
-                                     }}
-                                   >
-                                     Baixar pasta (ZIP)
-                                   </button>
-                                   <button
-                                     className="w-full text-left px-3 py-2 rounded-lg text-red-200 hover:bg-red-500/10"
-                                     onClick={() => {
-                                       setBreadcrumbMenuOpen(false);
-                                       const f = foldersFiltered.find((x) => x.id === activeFolderId);
-                                       if (f) onDeleteFolder(f.id, f.name);
-                                     }}
-                                   >
-                                     Apagar
-                                   </button>
-                                 </div>
-                               )}
                              </div>
-                           </div>
+                           ))}
                          </div>
                        ) : (
                          <div className="opacity-0 select-none">.</div>
@@ -855,7 +761,7 @@ export const DashboardPage: React.FC = () => {
                    }}
                    onDrop={async (e) => {
                      if (!activeFolderId) return;
-                     await handleDropToUnfiled(e);
+                     await handleDropOnFolder(null, e);
                    }}
                  >
                   <AssetGrid

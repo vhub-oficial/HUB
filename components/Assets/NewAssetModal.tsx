@@ -4,6 +4,7 @@ import { useDropzone } from 'react-dropzone';
 import { useAssets } from '../../hooks/useAssets';
 import { useAuth } from '../../contexts/AuthContext';
 import { inferExternalMetaFromUrl } from '../../lib/externalMedia';
+import { getCategoryMetaFields } from '../../lib/categoryMeta';
 
 const CATEGORIES = [
   { key: 'deepfakes', label: 'Deepfakes' },
@@ -53,6 +54,7 @@ export const NewAssetModal: React.FC<{
   const [progressText, setProgressText] = React.useState<string>('');
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const metaFields = React.useMemo(() => getCategoryMetaFields(category), [category]);
 
   // ✅ IMPORTANT: hooks must be called unconditionally (fixes React 310)
   const acceptByCategory = React.useMemo(() => {
@@ -186,100 +188,22 @@ export const NewAssetModal: React.FC<{
     }
   };
 
-  // Render “schema” básico por categoria (MVP). Depois refinamos exatamente como seus prints.
   const renderCategoryFields = () => {
-    if (!category) return null;
-    const set = (k: string, v: any) => setMeta((m) => ({ ...m, [k]: v }));
+    if (!metaFields.length) return null;
 
-    switch (category) {
-      case 'deepfakes':
-        return (
-          <>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Personagem (ex: Adele)" onChange={(e) => set('personagem', e.target.value)} />
-            <div className="grid grid-cols-2 gap-3">
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Versão (ex: V1, V2)" onChange={(e) => set('versao', e.target.value)} />
-            </div>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Capa (URL opcional)" onChange={(e) => set('thumbnail_url', e.target.value)} />
-          </>
-        );
-      case 'vozes':
-        return (
-          <>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Nome da voz (ex: Locutor Impactante)" onChange={(e) => set('nome_voz', e.target.value)} />
-          </>
-        );
-      case 'tiktok':
-        return (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Nicho (ex: Motivacional)" onChange={(e) => set('nicho', e.target.value)} />
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Gênero/Estilo (ex: Masculino)" onChange={(e) => set('genero', e.target.value)} />
-            </div>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Tipo de asset (ex: Hook, CTA)" onChange={(e) => set('tipo', e.target.value)} />
-          </>
-        );
-      case 'musicas':
-      case 'sfx':
-        return (
-          <>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Nome da trilha" onChange={(e) => set('nome_trilha', e.target.value)} />
-            <div className="grid grid-cols-2 gap-3">
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Momento da VSL" onChange={(e) => set('momento_vsl', e.target.value)} />
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Emoção/Vibe" onChange={(e) => set('emocao', e.target.value)} />
-            </div>
-          </>
-        );
-      case 'veo3':
-        return (
-          <>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Produto/Objeto do insert" onChange={(e) => set('produto', e.target.value)} />
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                defaultValue=""
-                onChange={(e) => set('dimensao', e.target.value)}
-              >
-                <option value="">Dimensão</option>
-                <option value="HORIZONTAL">Horizontal</option>
-                <option value="VERTICAL">Vertical</option>
-              </select>
-            </div>
-          </>
-        );
-      case 'provas-sociais':
-        return (
-          <>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Nicho do resultado (ex: Emagrecimento)" onChange={(e) => set('nicho', e.target.value)} />
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Gênero do cliente (ex: HOMEM)" onChange={(e) => set('genero', e.target.value)} />
-          </>
-        );
-      case 'ugc':
-        return (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Gênero do ator (ex: MULHER)" onChange={(e) => set('genero_ator', e.target.value)} />
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Faixa etária (ex: ADULTO)" onChange={(e) => set('faixa_etaria', e.target.value)} />
-            </div>
-          </>
-        );
-      default:
-        return null;
-    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {metaFields.map((field) => (
+          <input
+            key={field.key}
+            className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+            placeholder={field.placeholder || field.label}
+            value={(meta?.[field.key] ?? '') as string}
+            onChange={(e) => setMeta((prev) => ({ ...(prev ?? {}), [field.key]: e.target.value }))}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
