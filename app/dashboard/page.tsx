@@ -109,7 +109,8 @@ export const DashboardPage: React.FC = () => {
   const [activeFolderId, setActiveFolderId] = useState<string | undefined>(undefined);
   const [rootMode, setRootMode] = useState<'folders' | 'unfoldered'>('folders');
   const [folderSearch, setFolderSearch] = useState('');
-  const { options } = useFilterOptions(type, activeFolderId);
+  const effectiveFolderId: string | null = activeFolderId ? activeFolderId : null;
+  const { options } = useFilterOptions(type, effectiveFolderId);
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
@@ -533,7 +534,10 @@ export const DashboardPage: React.FC = () => {
                          <div className="mt-3 flex items-center gap-2 flex-wrap">
                            <button
                              className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
-                             onClick={() => setActiveFolderId(undefined)}
+                             onClick={() => {
+                              setActiveFolderId(undefined);
+                              setFilters({ tags: '', meta: {} });
+                            }}
                              onDragOver={(e) => e.preventDefault()}
                              onDrop={(e) => handleDropOnFolder(null, e)}
                              title="Raiz da categoria"
@@ -546,7 +550,10 @@ export const DashboardPage: React.FC = () => {
                                <span className="text-gray-500 text-sm">/</span>
                                <button
                                  className="text-sm text-gray-200 hover:text-white border border-border bg-black/20 rounded-lg px-3 py-1 hover:border-gold/30"
-                                 onClick={() => setActiveFolderId(node.id)}
+                                 onClick={() => {
+                                   setActiveFolderId(node.id);
+                                   setFilters({ tags: '', meta: {} });
+                                 }}
                                  onDragOver={(e) => e.preventDefault()}
                                  onDrop={(e) => handleDropOnFolder(node.id, e)}
                                  title="Abrir pasta"
@@ -589,7 +596,10 @@ export const DashboardPage: React.FC = () => {
                                  ? 'border-gold/40 bg-black/50 text-white'
                                  : 'border-border bg-black/30 text-gray-200 hover:border-gold/30',
                              ].join(' ')}
-                             onClick={() => setRootMode('folders')}
+                             onClick={() => {
+                               setRootMode('folders');
+                               setFilters({ tags: '', meta: {} });
+                             }}
                            >
                              Pastas
                            </button>
@@ -601,7 +611,10 @@ export const DashboardPage: React.FC = () => {
                                  ? 'border-gold/40 bg-black/50 text-white'
                                  : 'border-border bg-black/30 text-gray-200 hover:border-gold/30',
                              ].join(' ')}
-                             onClick={() => setRootMode('unfoldered')}
+                             onClick={() => {
+                               setRootMode('unfoldered');
+                               setFilters({ tags: '', meta: {} });
+                             }}
                            >
                              Soltos
                            </button>
@@ -650,6 +663,7 @@ export const DashboardPage: React.FC = () => {
                                onClick={() => {
                                  setActiveFolderId(f.id);
                                  setRootMode('folders');
+                                 setFilters({ tags: '', meta: {} });
                                  setFolderMenuOpenId(null);
                                }}
                              >

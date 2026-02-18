@@ -18,10 +18,12 @@ const SPEC_META_KEYS: Record<string, string[]> = {
   ugc: ['genero_ator', 'faixa_etaria'],
 };
 
-export function useFilterOptions(type?: string, folderId?: string | null) {
+export function useFilterOptions(type?: string | null, folderId?: string | null) {
   const { organizationId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Options>({ tags: [], meta: {} });
+
+  const folderKey = folderId === undefined ? 'U' : folderId === null ? 'N' : folderId;
 
   useEffect(() => {
     let mounted = true;
@@ -38,9 +40,10 @@ export function useFilterOptions(type?: string, folderId?: string | null) {
           .from('assets')
           .select('tags, meta')
           .eq('organization_id', organizationId)
-          .eq('type', type)
           .order('created_at', { ascending: false })
           .limit(500);
+
+        if (type) query = query.eq('type', type);
 
         if (typeof folderId === 'string') {
           query = query.eq('folder_id', folderId);
@@ -91,7 +94,7 @@ export function useFilterOptions(type?: string, folderId?: string | null) {
     return () => {
       mounted = false;
     };
-  }, [organizationId, type, folderId]);
+  }, [organizationId, type, folderKey]);
 
   return useMemo(() => ({ loading, options }), [loading, options]);
 }
