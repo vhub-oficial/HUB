@@ -134,16 +134,15 @@ export const DashboardPage: React.FC = () => {
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
   const shouldShowAssets = Boolean(activeFolderId || rootMode === 'unfoldered');
-  const effectiveFolderId = typeof activeFolderId === 'string' ? activeFolderId : null;
 
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: effectiveFolderId,
+    folderId: activeFolderId ? activeFolderId : null,
     tagsAny: shouldShowAssets ? tagsAny : null,
     metaFilters: shouldShowAssets ? filters.meta : null,
     query: shouldShowAssets ? (q ? q : null) : null,
     limit: 120,
-  }), [type, effectiveFolderId, shouldShowAssets, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+  }), [type, activeFolderId, shouldShowAssets, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
   const { assets: scopedAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
