@@ -60,7 +60,6 @@ export const AssetCard: React.FC<Props> = ({
   onDragStart,
   selected = false,
   selectedIds,
-  selectionMode = false,
   onToggleSelect,
 }) => {
   const navigate = useNavigate();
@@ -123,15 +122,16 @@ export const AssetCard: React.FC<Props> = ({
     const ctrl = e.ctrlKey;
     const shift = e.shiftKey;
 
-    // ✅ Drive rule:
-    // - If user is selecting (selectionMode) OR uses Ctrl/Cmd OR Shift: don't navigate, toggle/select.
-    if (selectionMode || meta || ctrl || shift) {
-      e.preventDefault();
-      e.stopPropagation();
-      onToggleSelect?.(asset.id, { shift, meta, ctrl });
-      return;
-    }
+    // ✅ Drive: 1 clique sempre seleciona (sem navegar)
+    e.preventDefault();
+    e.stopPropagation();
+    onToggleSelect?.(asset.id, { shift, meta, ctrl });
+  };
 
+  const handleCardDoubleClick = (e: React.MouseEvent) => {
+    // ✅ Drive: 2 cliques abre
+    e.preventDefault();
+    e.stopPropagation();
     navigate(`/assets/${asset.id}`);
   };
 
@@ -247,6 +247,7 @@ export const AssetCard: React.FC<Props> = ({
         if (onDragStart) onDragStart(e, asset.id);
       }}
       onClick={handleCardClick}
+      onDoubleClick={handleCardDoubleClick}
       className={[
         'group text-left rounded-xl overflow-hidden bg-surface border transition-colors relative',
         selected ? 'border-gold/70 ring-2 ring-gold/30' : 'border-border hover:border-gold/40',
