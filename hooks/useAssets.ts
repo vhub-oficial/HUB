@@ -120,21 +120,24 @@ export function useAssets(args?: AssetsArgs) {
     });
   };
 
-  const sanitizeObjectKeyPart = (input: string) => {
-    // 1) remove acentos (diacríticos)
-    const noDiacritics = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    // 2) troca espaços por hífen e remove chars perigosos
-    // permite: letras, números, ponto, hífen, underscore
-    const cleaned = noDiacritics
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/-+/g, '-') // colapsa hífens
-      .replace(/^-+|-+$/g, ''); // tira hífen no começo/fim
-
-    // 3) evita vazio e limita tamanho (suficiente para storage key)
-    const finalName = cleaned || 'file';
-    return finalName.slice(0, 160);
+  // Keep storage object paths safe across browsers/OS and Supabase Storage.
+  // - strip accents (NFD)
+  // - allow only [a-zA-Z0-9._-]
+  // - collapse multiple dashes
+  // - keep extension
+  const sanitizeObjectName = (name: string) => {
+    const trimmed = (name || 'file').trim();
+    const parts = trimmed.split('.');
+    const ext = parts.length > 1 ? `.${parts.pop()}` : '';
+    const base = parts.join('.') || 'file';
+    const ascii = base
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove diacritics
+      .replace(/[^a-zA-Z0-9._-]+/g, '-') // replace unsafe chars with '-'
+      .replace(/-+/g, '-') // collapse
+      .replace(/^-|-$/g, ''); // trim dashes
+    const safeBase = ascii || 'file';
+    return `${safeBase}${ext}`.slice(0, 160);
   };
 
   const uploadAsset = useCallback(async (
@@ -147,8 +150,10 @@ export function useAssets(args?: AssetsArgs) {
     if (!opts.tags?.length) throw new Error('tags obrigatórias');
 
     const bucket = getOrgBucketName(organizationId);
-    const safeName = sanitizeObjectKeyPart(file.name);
-    const filename = `${Date.now()}-${safeName}`;
+    const safeName = sanitizeObjectName(file.name);
+    // Use UUID prefix to avoid collisions in rapid multi-upload
+    const uploadId = genUUID();
+    const filename = `${uploadId}-${safeName}`;
     const folderPath = opts.folderId ? `folders/${opts.folderId}` : 'root';
     const objectPath = `${folderPath}/${filename}`;
 
