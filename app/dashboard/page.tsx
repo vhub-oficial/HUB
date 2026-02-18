@@ -11,7 +11,6 @@ import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBa
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
-import { InboxPanel } from '../../components/Inbox/InboxPanel';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -125,7 +124,6 @@ export const DashboardPage: React.FC = () => {
   };
 
   const [isBusyMove, setIsBusyMove] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = React.useState<number | null>(null);
@@ -256,25 +254,52 @@ export const DashboardPage: React.FC = () => {
   };
 
 
-  // helper: pega assetId do drag
-  const getDraggedAssetId = (e: React.DragEvent) => {
-    return (
-      e.dataTransfer.getData('application/x-vhub-asset-id') ||
-      e.dataTransfer.getData('text/plain') ||
-      ''
-    ).trim();
+  const getDraggedAssetIds = (e: React.DragEvent): string[] => {
+    // ✅ Prefer multi payload
+    const rawMulti = e.dataTransfer.getData('application/x-vhub-asset-ids');
+    if (rawMulti) {
+      try {
+        const parsed = JSON.parse(rawMulti);
+        if (Array.isArray(parsed)) {
+          return parsed.map((x) => String(x).trim()).filter(Boolean);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // ✅ Fallback to single id
+    const single =
+      (e.dataTransfer.getData('application/x-vhub-asset-id') ||
+        e.dataTransfer.getData('text/plain') ||
+        '').trim();
+
+    if (!single) return [];
+
+    // If text/plain contains CSV from our drag fallback
+    if (single.includes(',')) {
+      return single.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
+    return [single];
   };
 
   // drop em uma pasta
   const handleDropOnFolder = async (folderId: string, e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const assetId = getDraggedAssetId(e);
-    if (!assetId) return;
+    const assetIds = getDraggedAssetIds(e);
+    if (!assetIds.length) return;
 
     try {
       setIsBusyMove(true);
-      await moveAssetToFolder(assetId, folderId);
+
+      // ✅ Move sequencial para evitar rate-limit/overload
+      for (const id of assetIds) {
+        // eslint-disable-next-line no-await-in-loop
+        await moveAssetToFolder(id, folderId);
+      }
+
       refresh();
       const fname = foldersFiltered.find((f) => f.id === folderId)?.name ?? 'pasta';
       showToast({ type: 'success', text: `Movido para “${fname}”` });
@@ -288,12 +313,15 @@ export const DashboardPage: React.FC = () => {
   const handleDropToUnfiled = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const assetId = getDraggedAssetId(e);
-    if (!assetId) return;
+    const assetIds = getDraggedAssetIds(e);
+    if (!assetIds.length) return;
 
     try {
       setIsBusyMove(true);
-      await moveAssetToFolder(assetId, null);
+      for (const id of assetIds) {
+        // eslint-disable-next-line no-await-in-loop
+        await moveAssetToFolder(id, null);
+      }
       refresh();
       showToast({ type: 'success', text: 'Movido para a raiz' });
     } catch (err: any) {
@@ -636,19 +664,9 @@ export const DashboardPage: React.FC = () => {
                          <option value="za">Z–A</option>
                        </select>
 
-                       {type && (
-                         <button
-                           className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
-                           onClick={() => setInboxOpen(true)}
-                           title="Inbox (uploads em lote para organizar)"
-                         >
-                           Inbox
-                         </button>
-                       )}
-
-                       <button
-                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
-                         onClick={() => setNewFolderOpen(true)}
+                      <button
+                        className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
+                        onClick={() => setNewFolderOpen(true)}
                        >
                          + Nova pasta
                        </button>
@@ -882,15 +900,6 @@ export const DashboardPage: React.FC = () => {
           enabled
         />
       )}
-
-      {type && (
-        <InboxPanel
-          open={inboxOpen}
-          onClose={() => setInboxOpen(false)}
-          categoryType={type}
-        />
-      )}
-
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">

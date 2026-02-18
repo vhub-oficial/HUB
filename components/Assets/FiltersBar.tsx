@@ -17,9 +17,7 @@ const SPEC_LABELS: Record<string, { title: string; fields: { key: string; labelA
   },
   vozes: {
     title: 'VOZ PRA CLONAR',
-    fields: [
-      { key: 'duracao', labelAll: 'TODAS AS DURAÇÕES' },
-    ],
+    fields: [],
   },
   tiktok: {
     title: 'TIKTOK',

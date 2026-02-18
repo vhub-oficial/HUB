@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAssets, type AssetRow } from '../../../hooks/useAssets';
 import { useAuth } from '../../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../../lib/storageHelpers';
@@ -21,20 +21,27 @@ const normalizeTags = (s: string) =>
 export const AssetDetailPage: React.FC = () => {
   const { id } = useParams();
   const nav = useNavigate();
+  const location = useLocation();
   const { organizationId, role } = useAuth();
   const { getAssetById, updateAsset, deleteAsset } = useAssets();
 
   const [loading, setLoading] = React.useState(true);
+
+  const editFromQuery = React.useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    return sp.get('edit') === '1';
+  }, [location.search]);
   const [asset, setAsset] = React.useState<AssetRow | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string>('');
   const [isExternalEmbed, setIsExternalEmbed] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
-  const [editing, setEditing] = React.useState(false);
+  const [editing, setEditing] = React.useState<boolean>(editFromQuery);
   const [name, setName] = React.useState('');
   const [tagsText, setTagsText] = React.useState('');
   const [url, setUrl] = React.useState('');
   const [metaJson, setMetaJson] = React.useState('');
+  const [metaForm, setMetaForm] = React.useState<Record<string, string>>({});
   const [showTech, setShowTech] = React.useState(false);
 
   const canEdit = role === 'admin' || role === 'editor';
@@ -86,6 +93,29 @@ export const AssetDetailPage: React.FC = () => {
     return () => { mounted = false; };
   }, [id, getAssetById, organizationId]);
 
+  React.useEffect(() => {
+    if (editFromQuery) setEditing(true);
+  }, [editFromQuery]);
+
+  React.useEffect(() => {
+    if (!asset) return;
+    const m = (asset.meta ?? {}) as any;
+
+    setMetaForm({
+      produto: m.produto ?? '',
+      dimensao: m.dimensao ?? '',
+      versao: m.versao ?? '',
+      personagem: m.personagem ?? '',
+      nicho: m.nicho ?? '',
+      genero: m.genero ?? '',
+      tipo: m.tipo ?? '',
+      momento_vsl: m.momento_vsl ?? '',
+      emocao: m.emocao ?? '',
+      faixa_etaria: m.faixa_etaria ?? '',
+      genero_ator: m.genero_ator ?? '',
+    });
+  }, [asset?.id]);
+
   const onSave = async () => {
     if (!asset) return;
     try {
@@ -98,11 +128,28 @@ export const AssetDetailPage: React.FC = () => {
         throw new Error('Meta inválida (JSON).');
       }
 
+      const nextMeta = {
+        ...(asset.meta ?? {}),
+        ...parsedMeta,
+        ...Object.fromEntries(
+          Object.entries(metaForm)
+            .map(([k, v]) => [k, (v ?? '').trim()])
+            .filter(([_, v]) => v !== '')
+        ),
+      } as Record<string, any>;
+
+      Object.keys(nextMeta).forEach((k) => {
+        if (typeof nextMeta[k] === 'string' && nextMeta[k].trim() === '') delete nextMeta[k];
+      });
+
+      // ✅ remover chaves vazias e também garantir que duracao não exista
+      delete (nextMeta as any).duracao;
+
       // prevent changing url for storage assets
       const nextPatch: Partial<AssetRow> = {
         name,
         tags,
-        meta: parsedMeta,
+        meta: nextMeta,
       };
       if (isExternal(asset)) nextPatch.url = url;
 
@@ -110,7 +157,7 @@ export const AssetDetailPage: React.FC = () => {
       setEditing(false);
 
       // refresh local state
-      const fresh = { ...asset, ...nextPatch, tags, meta: parsedMeta } as AssetRow;
+      const fresh = { ...asset, ...nextPatch, tags, meta: nextMeta } as AssetRow;
       setAsset(fresh);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao salvar');
@@ -158,7 +205,6 @@ export const AssetDetailPage: React.FC = () => {
   };
 
   // Common-ish
-  push('Duração', meta.duracao);
   push('Versão', meta.versao);
   push('Personagem', meta.personagem);
   push('Produto', meta.produto);
@@ -316,6 +362,34 @@ export const AssetDetailPage: React.FC = () => {
               ) : (
                 <div className="mt-1 text-gray-300 text-sm break-all">{asset.url}</div>
               )}
+            </div>
+          )}
+
+          {editing && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {[
+                ['produto', 'Produto'],
+                ['dimensao', 'Dimensão'],
+                ['personagem', 'Personagem'],
+                ['versao', 'Versão'],
+                ['nicho', 'Nicho'],
+                ['genero', 'Gênero'],
+                ['tipo', 'Tipo'],
+                ['momento_vsl', 'Momento VSL'],
+                ['emocao', 'Emoção'],
+                ['faixa_etaria', 'Faixa etária'],
+                ['genero_ator', 'Gênero do ator'],
+              ].map(([k, label]) => (
+                <div className="space-y-1" key={k}>
+                  <div className="text-xs text-gray-400">{label}</div>
+                  <input
+                    className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                    value={metaForm[k] ?? ''}
+                    onChange={(e) => setMetaForm((p) => ({ ...p, [k]: e.target.value }))}
+                    placeholder={label}
+                  />
+                </div>
+              ))}
             </div>
           )}
 

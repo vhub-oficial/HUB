@@ -199,8 +199,6 @@ export const NewAssetModal: React.FC<{
               placeholder="Personagem (ex: Adele)" onChange={(e) => set('personagem', e.target.value)} />
             <div className="grid grid-cols-2 gap-3">
               <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Duração (ex: 0:30)" onChange={(e) => set('duracao', e.target.value)} />
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                 placeholder="Versão (ex: V1, V2)" onChange={(e) => set('versao', e.target.value)} />
             </div>
             <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
@@ -212,8 +210,6 @@ export const NewAssetModal: React.FC<{
           <>
             <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
               placeholder="Nome da voz (ex: Locutor Impactante)" onChange={(e) => set('nome_voz', e.target.value)} />
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Duração do sample (ex: 0:15)" onChange={(e) => set('duracao', e.target.value)} />
           </>
         );
       case 'tiktok':
@@ -258,8 +254,6 @@ export const NewAssetModal: React.FC<{
                 <option value="HORIZONTAL">Horizontal</option>
                 <option value="VERTICAL">Vertical</option>
               </select>
-              <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                placeholder="Duração (ex: 0:05)" onChange={(e) => set('duracao', e.target.value)} />
             </div>
           </>
         );
@@ -281,8 +275,6 @@ export const NewAssetModal: React.FC<{
               <input className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                 placeholder="Faixa etária (ex: ADULTO)" onChange={(e) => set('faixa_etaria', e.target.value)} />
             </div>
-            <input className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-              placeholder="Duração (ex: 1:00)" onChange={(e) => set('duracao', e.target.value)} />
           </>
         );
       default:
