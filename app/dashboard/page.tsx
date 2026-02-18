@@ -69,6 +69,26 @@ export const DashboardPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  React.useEffect(() => {
+    const onDown = (ev: MouseEvent) => {
+      if (!(ev.target instanceof HTMLElement)) return;
+
+      // Se clicou dentro de um card, não limpa
+      if (ev.target.closest('[data-asset-card]')) return;
+
+      // Se clicou em áreas marcadas para manter seleção, não limpa
+      if (ev.target.closest('[data-keep-selection]')) return;
+
+      // Clique fora: limpa seleção (Drive)
+      setSelectedIds(new Set());
+      setAnchorIndex(null);
+    };
+
+    // capture=true ajuda a pegar antes de handlers internos
+    window.addEventListener('mousedown', onDown, true);
+    return () => window.removeEventListener('mousedown', onDown, true);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -514,13 +534,15 @@ export const DashboardPage: React.FC = () => {
          ) : (
              <div className="space-y-8">
                  {type && (
-                   <FiltersBar
-                     type={type}
-                     value={filters}
-                     options={options}
-                     onChange={setFilters}
-                     onClear={() => setFilters({ tags: '', meta: {} })}
-                   />
+                   <div data-keep-selection>
+                     <FiltersBar
+                       type={type}
+                       value={filters}
+                       options={options}
+                       onChange={setFilters}
+                       onClear={() => setFilters({ tags: '', meta: {} })}
+                     />
+                   </div>
                  )}
 
                  {/* ✅ Pastas (Drive-style) */}
@@ -717,7 +739,7 @@ export const DashboardPage: React.FC = () => {
                  </div>
 
                  {selectedIds.size > 0 && (
-                   <div className="sticky top-3 z-30">
+                   <div className="sticky top-3 z-30" data-keep-selection>
                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-black/60 backdrop-blur px-4 py-3">
                        <div className="text-sm text-gray-200">
                          {selectedIds.size} selecionado(s)
