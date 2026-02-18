@@ -148,6 +148,102 @@ export const AssetCard: React.FC<Props> = ({
         e.dataTransfer.setData('application/x-vhub-asset-id', asset.id);
         e.dataTransfer.setData('text/plain', asset.id);
 
+        // ✅ Drive-like drag preview (badge com quantidade)
+        try {
+          if (ids.length > 1) {
+            const ghost = document.createElement('div');
+            ghost.style.position = 'fixed';
+            ghost.style.top = '-1000px';
+            ghost.style.left = '-1000px';
+            ghost.style.width = '220px';
+            ghost.style.height = '64px';
+            ghost.style.display = 'flex';
+            ghost.style.alignItems = 'center';
+            ghost.style.gap = '10px';
+            ghost.style.padding = '10px 12px';
+            ghost.style.borderRadius = '14px';
+            ghost.style.background = 'rgba(0,0,0,0.82)';
+            ghost.style.border = '1px solid rgba(255,255,255,0.12)';
+            ghost.style.boxShadow = '0 10px 30px rgba(0,0,0,0.45)';
+            ghost.style.backdropFilter = 'blur(10px)';
+            ghost.style.webkitBackdropFilter = 'blur(10px)';
+            ghost.style.color = '#fff';
+            ghost.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+
+            const thumb = document.createElement('div');
+            thumb.style.width = '44px';
+            thumb.style.height = '44px';
+            thumb.style.borderRadius = '12px';
+            thumb.style.background = 'rgba(255,255,255,0.08)';
+            thumb.style.border = '1px solid rgba(255,255,255,0.12)';
+            thumb.style.display = 'flex';
+            thumb.style.alignItems = 'center';
+            thumb.style.justifyContent = 'center';
+            thumb.style.flex = '0 0 auto';
+
+            // ícone simples (sem dependências)
+            thumb.innerHTML =
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none">' +
+              '<path d="M7 7a2 2 0 0 1 2-2h6l2 2v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7Z" stroke="rgba(255,255,255,0.85)" stroke-width="1.6"/>' +
+              '<path d="M15 5v2h2" stroke="rgba(255,255,255,0.85)" stroke-width="1.6"/>' +
+              '</svg>';
+
+            const textWrap = document.createElement('div');
+            textWrap.style.display = 'flex';
+            textWrap.style.flexDirection = 'column';
+            textWrap.style.minWidth = '0';
+
+            const title = document.createElement('div');
+            title.textContent = 'Movendo itens';
+            title.style.fontSize = '13px';
+            title.style.fontWeight = '700';
+            title.style.lineHeight = '1.1';
+
+            const subtitle = document.createElement('div');
+            subtitle.textContent = `${ids.length} selecionado(s)`;
+            subtitle.style.fontSize = '12px';
+            subtitle.style.opacity = '0.75';
+            subtitle.style.marginTop = '3px';
+            subtitle.style.whiteSpace = 'nowrap';
+            subtitle.style.overflow = 'hidden';
+            subtitle.style.textOverflow = 'ellipsis';
+
+            const badge = document.createElement('div');
+            badge.textContent = String(ids.length);
+            badge.style.marginLeft = 'auto';
+            badge.style.width = '30px';
+            badge.style.height = '30px';
+            badge.style.borderRadius = '999px';
+            badge.style.display = 'flex';
+            badge.style.alignItems = 'center';
+            badge.style.justifyContent = 'center';
+            badge.style.fontSize = '12px';
+            badge.style.fontWeight = '800';
+            badge.style.background = 'rgba(255, 215, 0, 0.18)'; // gold-ish, sem depender de CSS
+            badge.style.border = '1px solid rgba(255, 215, 0, 0.35)';
+            badge.style.color = 'rgba(255,255,255,0.95)';
+
+            textWrap.appendChild(title);
+            textWrap.appendChild(subtitle);
+
+            ghost.appendChild(thumb);
+            ghost.appendChild(textWrap);
+            ghost.appendChild(badge);
+
+            document.body.appendChild(ghost);
+
+            // offset para não esconder o cursor
+            e.dataTransfer.setDragImage(ghost, 28, 18);
+
+            // cleanup no próximo frame
+            requestAnimationFrame(() => {
+              ghost.remove();
+            });
+          }
+        } catch {
+          // se falhar, mantém preview padrão do browser
+        }
+
         if (onDragStart) onDragStart(e, asset.id);
       }}
       onClick={handleCardClick}
