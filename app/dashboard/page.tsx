@@ -356,19 +356,66 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const sanitizeZipName = (name: string) =>
+    (name || 'download')
+      .toString()
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, ' ')
+      .slice(0, 120);
+
+  const extFromMime = (mime?: string | null) => {
+    if (!mime) return '';
+    const m = mime.toLowerCase();
+    if (m.includes('video/mp4')) return '.mp4';
+    if (m.includes('video/quicktime')) return '.mov';
+    if (m.includes('video/webm')) return '.webm';
+    if (m.includes('audio/mpeg')) return '.mp3';
+    if (m.includes('audio/wav')) return '.wav';
+    if (m.includes('audio/mp4')) return '.m4a';
+    if (m.includes('image/png')) return '.png';
+    if (m.includes('image/jpeg')) return '.jpg';
+    if (m.includes('image/webp')) return '.webp';
+    return '';
+  };
+
+  const buildZipFilename = (asset: any) => {
+    const base = sanitizeZipName(asset?.name || asset?.meta?.original_name || 'download');
+
+    const original = (asset?.meta?.original_name as string | undefined) || '';
+    const originalExt = original.includes('.') ? `.${original.split('.').pop()}` : '';
+    const mimeExt = extFromMime(asset?.meta?.mime_type);
+
+    const ext = originalExt || mimeExt || '';
+    return `${base}${ext}`;
+  };
+
+  const uniqueName = (name: string, seen: Map<string, number>) => {
+    const cur = seen.get(name) ?? 0;
+    if (cur === 0) {
+      seen.set(name, 1);
+      return name;
+    }
+    const dot = name.lastIndexOf('.');
+    const hasExt = dot > 0 && dot < name.length - 1;
+    const stem = hasExt ? name.slice(0, dot) : name;
+    const ext = hasExt ? name.slice(dot) : '';
+    const next = `${stem} (${cur + 1})${ext}`;
+    seen.set(name, cur + 1);
+    return next;
+  };
+
   const downloadSelectedAsZip = async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) throw new Error('Nada selecionado.');
 
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
+    const seen = new Map<string, number>();
 
     for (const id of ids) {
       const asset = scopedAssets.find((a) => a.id === id);
       if (!asset) continue;
-
-      const filenameBase = (asset.name || 'download').toString().trim().slice(0, 120);
-      const safe = filenameBase.replace(/[\\/:*?"<>|]+/g, '-');
 
       let urlToFetch = asset.url;
 
@@ -384,7 +431,10 @@ export const DashboardPage: React.FC = () => {
       if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
       const blob = await res.blob();
 
-      zip.file(safe, blob);
+      const baseName = buildZipFilename(asset);
+      const finalName = uniqueName(baseName, seen);
+
+      zip.file(finalName, blob);
     }
 
     const out = await zip.generateAsync({ type: 'blob' });
@@ -392,6 +442,56 @@ export const DashboardPage: React.FC = () => {
     const a = document.createElement('a');
     a.href = blobUrl;
     a.download = `vhub-${type ?? 'assets'}-${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
+  };
+
+  const downloadCurrentFolderAsZip = async () => {
+    if (!activeFolderId) throw new Error('Abra uma pasta para baixar.');
+    if (!scopedAssets.length) throw new Error('Pasta vazia.');
+
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    const seen = new Map<string, number>();
+
+    const folderName =
+      foldersFiltered.find((f) => f.id === activeFolderId)?.name ||
+      breadcrumb[breadcrumb.length - 1]?.name ||
+      'pasta';
+
+    const folderSafe = sanitizeZipName(folderName);
+
+    // cria subpasta no zip
+    const sub = zip.folder(folderSafe) ?? zip;
+
+    for (const asset of scopedAssets) {
+      let urlToFetch = asset.url;
+
+      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
+      if (!isExternal) {
+        const bucket = getOrgBucketName(organizationId!);
+        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
+      } else {
+        urlToFetch = asset.meta?.download_url || asset.url;
+      }
+
+      const res = await fetch(urlToFetch);
+      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
+      const blob = await res.blob();
+
+      const baseName = buildZipFilename(asset);
+      const finalName = uniqueName(baseName, seen);
+
+      sub.file(finalName, blob);
+    }
+
+    const out = await zip.generateAsync({ type: 'blob' });
+    const blobUrl = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `vhub-${type ?? 'assets'}-${folderSafe}-${Date.now()}.zip`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -670,6 +770,23 @@ export const DashboardPage: React.FC = () => {
                            onChange={(e) => setFolderSearch(e.target.value)}
                          />
                        )}
+
+                      {activeFolderId && scopedAssets.length > 0 && (
+                        <button
+                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
+                          onClick={async () => {
+                            try {
+                              await downloadCurrentFolderAsZip();
+                              showToast({ type: 'success', text: 'Download da pasta iniciado (ZIP)' });
+                            } catch (e: any) {
+                              showToast({ type: 'error', text: e?.message ?? 'Falha no download da pasta' });
+                            }
+                          }}
+                          title="Baixar todos os assets desta pasta"
+                        >
+                          Baixar pasta (ZIP)
+                        </button>
+                      )}
 
                       <button
                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
