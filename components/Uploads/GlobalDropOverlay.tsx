@@ -33,11 +33,23 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
 
     const onDrop = (e: DragEvent) => {
       if (!e.dataTransfer) return;
+
+      // Se algum handler local já marcou preventDefault, não processa aqui.
+      if (e.defaultPrevented) return;
+
+      // Se o drop aconteceu dentro de um dropzone local, ignora.
+      const t = e.target as Element | null;
+      if (t && typeof (t as any).closest === 'function') {
+        const insideLocalDropzone = (t as any).closest('[data-local-dropzone="true"]');
+        if (insideLocalDropzone) return;
+      }
+
       const files = Array.from(e.dataTransfer.files ?? []);
       setDragging(false);
       if (!files.length) return;
 
       e.preventDefault();
+      e.stopPropagation();
 
       if (!categoryType) {
         alert('Selecione uma categoria antes de soltar arquivos.');
