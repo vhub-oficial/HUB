@@ -6,6 +6,7 @@ type Props = {
   assets: AssetRow[];
   selectedIds: Set<string>;
   selectionMode: boolean;
+  density?: 'compact' | 'default' | 'large';
 
   onToggleSelect: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
   onMarqueeSelect: (ids: string[], mode: 'replace' | 'add') => void;
@@ -22,6 +23,7 @@ export const AssetGrid: React.FC<Props> = ({
   assets,
   selectedIds,
   selectionMode,
+  density = 'default',
   onToggleSelect,
   onMarqueeSelect,
   onDeleted,
@@ -136,6 +138,12 @@ export const AssetGrid: React.FC<Props> = ({
     } as React.CSSProperties;
   }, [marquee]);
 
+  const gridClass = React.useMemo(() => {
+    if (density === 'compact') return 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3';
+    if (density === 'large') return 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6';
+    return 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4'; // default (mais denso que antes)
+  }, [density]);
+
   return (
     <div
       ref={containerRef}
@@ -150,7 +158,7 @@ export const AssetGrid: React.FC<Props> = ({
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className={gridClass}>
         {assets.map((asset) => (
           <div key={asset.id} ref={setItemRef(asset.id)} data-asset-card>
             <AssetCard

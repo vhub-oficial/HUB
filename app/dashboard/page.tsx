@@ -149,6 +149,7 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = React.useState<number | null>(null);
+  const [gridDensity, setGridDensity] = React.useState<'compact' | 'default' | 'large'>('default');
 
   const selectionMode = selectedIds.size > 0;
 
@@ -600,6 +601,17 @@ export const DashboardPage: React.FC = () => {
                          <option value="za">Z–A</option>
                        </select>
 
+                       <select
+                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                         value={gridDensity}
+                         onChange={(e) => setGridDensity(e.target.value as any)}
+                         title="Tamanho do grid"
+                       >
+                         <option value="compact">Compacto</option>
+                         <option value="default">Padrão</option>
+                         <option value="large">Grande</option>
+                       </select>
+
                        {!activeFolderId && (
                          <input
                            className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white w-64"
@@ -812,6 +824,7 @@ export const DashboardPage: React.FC = () => {
                       onMarqueeSelect={handleMarqueeSelect}
                       onDeleted={refresh}
                       onDragStart={onDragStartAsset}
+                      density={gridDensity}
                     />
                     {scopedAssets.length === 0 && (
                       <div className="text-gray-500 text-sm mt-3">
