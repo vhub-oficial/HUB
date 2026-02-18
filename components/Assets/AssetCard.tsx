@@ -15,6 +15,7 @@ type Props = {
   selectedIds?: string[];
   selectionMode?: boolean;
   onToggleSelect?: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
+  onContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
 };
 
 const isExternal = (asset: AssetRow) => {
@@ -61,6 +62,7 @@ export const AssetCard: React.FC<Props> = ({
   selected = false,
   selectedIds,
   onToggleSelect,
+  onContextMenu,
 }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
@@ -256,6 +258,7 @@ export const AssetCard: React.FC<Props> = ({
       }}
       onClick={handleCardClick}
       onDoubleClick={handleCardDoubleClick}
+      onContextMenu={(e) => onContextMenu?.(e, asset.id)}
       className={[
         'group text-left rounded-xl overflow-hidden bg-surface border transition-colors relative',
         selected ? 'border-gold/70 ring-2 ring-gold/30' : 'border-border hover:border-gold/40',

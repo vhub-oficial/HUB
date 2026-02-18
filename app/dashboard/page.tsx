@@ -91,6 +91,22 @@ export const DashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
+      if (ev.target instanceof HTMLElement && ev.target.closest('[data-selection-ctx-menu]')) return;
+      setCtxMenu(null);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCtxMenu(null);
+    };
+    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('keydown', onEsc);
+    return () => {
+      window.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('keydown', onEsc);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const onDown = (ev: MouseEvent) => {
       if (!(ev.target instanceof HTMLElement)) return;
       if (ev.target.closest('[data-grid-menu]')) return;
       setGridMenuOpen(false);
@@ -159,8 +175,10 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = React.useState<number | null>(null);
+  const [ctxMenu, setCtxMenu] = React.useState<null | { x: number; y: number }>(null);
   const [gridDensity, setGridDensity] = React.useState<'compact' | 'default' | 'large'>('default');
   const [gridMenuOpen, setGridMenuOpen] = React.useState(false);
+  const closeCtxMenu = React.useCallback(() => setCtxMenu(null), []);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -297,6 +315,28 @@ export const DashboardPage: React.FC = () => {
       const last = ids[ids.length - 1];
       const idx = scopedIdToIndex.get(last);
       if (idx != null) setAnchorIndex(idx);
+    },
+    [scopedIdToIndex]
+  );
+
+
+  const openSelectionContextMenu = React.useCallback(
+    (e: React.MouseEvent, assetId?: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Se clicou com direito em um asset:
+      // - se já está selecionado, mantém seleção
+      // - se não está selecionado, seleciona só ele (Drive-like)
+      if (assetId) {
+        setSelectedIds((prev) => {
+          if (prev.has(assetId)) return prev;
+          return new Set([assetId]);
+        });
+        setAnchorIndex(scopedIdToIndex.get(assetId) ?? null);
+      }
+
+      setCtxMenu({ x: e.clientX, y: e.clientY });
     },
     [scopedIdToIndex]
   );
@@ -448,30 +488,35 @@ export const DashboardPage: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
 
-  const downloadCurrentFolderAsZip = async () => {
-    if (!activeFolderId) throw new Error('Abra uma pasta para baixar.');
-    if (!scopedAssets.length) throw new Error('Pasta vazia.');
+  const downloadFolderAsZipById = async (folderId: string, folderName: string) => {
+    if (!organizationId) throw new Error('Sem organização.');
+    if (!type) throw new Error('Selecione uma categoria.');
+
+    const { data, error } = await supabase
+      .from('assets')
+      .select('id,name,url,meta')
+      .eq('organization_id', organizationId)
+      .eq('type', type)
+      .eq('folder_id', folderId)
+      .limit(2000);
+
+    if (error) throw error;
+    const assets = (data ?? []) as any[];
+    if (!assets.length) throw new Error('Pasta vazia.');
 
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
     const seen = new Map<string, number>();
 
-    const folderName =
-      foldersFiltered.find((f) => f.id === activeFolderId)?.name ||
-      breadcrumb[breadcrumb.length - 1]?.name ||
-      'pasta';
-
-    const folderSafe = sanitizeZipName(folderName);
-
-    // cria subpasta no zip
+    const folderSafe = sanitizeZipName(folderName || 'pasta');
     const sub = zip.folder(folderSafe) ?? zip;
 
-    for (const asset of scopedAssets) {
+    for (const asset of assets) {
       let urlToFetch = asset.url;
 
       const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
       if (!isExternal) {
-        const bucket = getOrgBucketName(organizationId!);
+        const bucket = getOrgBucketName(organizationId);
         urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
       } else {
         urlToFetch = asset.meta?.download_url || asset.url;
@@ -483,7 +528,6 @@ export const DashboardPage: React.FC = () => {
 
       const baseName = buildZipFilename(asset);
       const finalName = uniqueName(baseName, seen);
-
       sub.file(finalName, blob);
     }
 
@@ -491,12 +535,13 @@ export const DashboardPage: React.FC = () => {
     const blobUrl = URL.createObjectURL(out);
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = `vhub-${type ?? 'assets'}-${folderSafe}-${Date.now()}.zip`;
+    a.download = `vhub-${type}-${folderSafe}-${Date.now()}.zip`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
+
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -771,22 +816,6 @@ export const DashboardPage: React.FC = () => {
                          />
                        )}
 
-                      {activeFolderId && scopedAssets.length > 0 && (
-                        <button
-                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
-                          onClick={async () => {
-                            try {
-                              await downloadCurrentFolderAsZip();
-                              showToast({ type: 'success', text: 'Download da pasta iniciado (ZIP)' });
-                            } catch (e: any) {
-                              showToast({ type: 'error', text: e?.message ?? 'Falha no download da pasta' });
-                            }
-                          }}
-                          title="Baixar todos os assets desta pasta"
-                        >
-                          Baixar pasta (ZIP)
-                        </button>
-                      )}
 
                       <button
                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
@@ -886,6 +915,20 @@ export const DashboardPage: React.FC = () => {
                                      Renomear
                                    </button>
                                    <button
+                                     className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+                                     onClick={async () => {
+                                       setFolderMenuOpenId(null);
+                                       try {
+                                         await downloadFolderAsZipById(f.id, f.name);
+                                         showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
+                                       } catch (e: any) {
+                                         showToast({ type: 'error', text: e?.message ?? 'Falha no download' });
+                                       }
+                                     }}
+                                   >
+                                     Baixar (ZIP)
+                                   </button>
+                                   <button
                                      className="w-full text-left px-3 py-2 rounded-lg text-red-200 hover:bg-red-500/10"
                                      onClick={() => {
                                        setFolderMenuOpenId(null);
@@ -917,61 +960,6 @@ export const DashboardPage: React.FC = () => {
                    )}
                  </div>
 
-                 {selectedIds.size > 0 && (
-                   <div className="sticky top-3 z-30" data-keep-selection>
-                     <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-black/60 backdrop-blur px-4 py-3">
-                       <div className="text-sm text-gray-200">
-                         {selectedIds.size} selecionado(s)
-                       </div>
-
-                       <div className="flex items-center gap-2">
-                         <button
-                           className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-100 hover:border-gold/40"
-                           onClick={async () => {
-                             try {
-                               await downloadSelectedAsZip();
-                               showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
-                             } catch (e: any) {
-                               showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP' });
-                             }
-                           }}
-                         >
-                           Baixar (ZIP)
-                         </button>
-
-                         {activeFolderId && (
-                           <button
-                             className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-100 hover:border-gold/40"
-                             onClick={async () => {
-                               try {
-                                 setIsBusyMove(true);
-                                 const ids = Array.from(selectedIds);
-                                 await Promise.all(ids.map((id) => moveAssetToFolder(id, null)));
-                                 setSelectedIds(new Set());
-                                 refresh();
-                                 showToast({ type: 'success', text: 'Movido para a raiz' });
-                               } catch (e: any) {
-                                 showToast({ type: 'error', text: e?.message ?? 'Falha ao mover' });
-                               } finally {
-                                 setIsBusyMove(false);
-                               }
-                             }}
-                           >
-                             Mover p/ Raiz
-                           </button>
-                         )}
-
-                         <button
-                           className="px-3 py-2 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-red-400/60"
-                           onClick={() => setSelectedIds(new Set())}
-                         >
-                           Limpar
-                         </button>
-                       </div>
-                     </div>
-                   </div>
-                 )}
-
                  {/* Asset Grid */}
                  <div
                    className="mt-6"
@@ -991,6 +979,7 @@ export const DashboardPage: React.FC = () => {
                       onMarqueeSelect={handleMarqueeSelect}
                       onDeleted={refresh}
                       onDragStart={onDragStartAsset}
+                      onItemContextMenu={openSelectionContextMenu}
                       density={gridDensity}
                     />
                     {scopedAssets.length === 0 && (
@@ -1025,6 +1014,68 @@ export const DashboardPage: React.FC = () => {
           folderId={activeFolderId ?? null}
           enabled
         />
+      )}
+
+
+      {ctxMenu && selectedIds.size > 0 && (
+        <div
+          className="fixed z-[9999] rounded-xl border border-border bg-black/90 backdrop-blur p-2 w-56"
+          data-selection-ctx-menu
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+            onClick={async () => {
+              try {
+                await downloadSelectedAsZip();
+                showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
+              } catch (e: any) {
+                showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP' });
+              } finally {
+                closeCtxMenu();
+              }
+            }}
+          >
+            Baixar selecionados (ZIP)
+          </button>
+
+          {activeFolderId && (
+            <button
+              className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
+              onClick={async () => {
+                try {
+                  const ids = Array.from(selectedIds);
+                  for (const id of ids) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await moveAssetToFolder(id, null);
+                  }
+                  setSelectedIds(new Set());
+                  setAnchorIndex(null);
+                  refresh();
+                  showToast({ type: 'success', text: 'Movido para a raiz' });
+                } catch (e: any) {
+                  showToast({ type: 'error', text: e?.message ?? 'Falha ao mover' });
+                } finally {
+                  closeCtxMenu();
+                }
+              }}
+            >
+              Mover p/ Raiz
+            </button>
+          )}
+
+          <button
+            className="w-full text-left px-3 py-2 rounded-lg text-gray-200 hover:bg-white/5"
+            onClick={() => {
+              setSelectedIds(new Set());
+              setAnchorIndex(null);
+              closeCtxMenu();
+            }}
+          >
+            Limpar seleção
+          </button>
+        </div>
       )}
 
       {toast && (

@@ -13,6 +13,7 @@ type Props = {
 
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
+  onItemContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
 };
 
 function rectIntersects(a: DOMRect, b: DOMRect) {
@@ -28,6 +29,7 @@ export const AssetGrid: React.FC<Props> = ({
   onMarqueeSelect,
   onDeleted,
   onDragStart,
+  onItemContextMenu,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -169,6 +171,7 @@ export const AssetGrid: React.FC<Props> = ({
               selectedIds={Array.from(selectedIds)}
               selectionMode={selectionMode}
               onToggleSelect={onToggleSelect}
+              onContextMenu={onItemContextMenu}
             />
           </div>
         ))}
