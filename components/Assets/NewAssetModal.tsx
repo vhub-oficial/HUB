@@ -360,7 +360,7 @@ export const NewAssetModal: React.FC<{
             ) : (
               <div className="space-y-3">
                 <div
-                  {...getRootProps()}
+                  {...getRootProps()} data-local-dropzone="true"
                   className={[
                     "rounded-xl border border-dashed p-5 text-center transition-colors",
                     isDragActive ? "border-gold/50 bg-gold/5" : "border-border bg-black/20",

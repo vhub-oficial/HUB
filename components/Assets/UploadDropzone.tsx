@@ -98,7 +98,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
       </div>
 
       <div
-        {...getRootProps()}
+        {...getRootProps()} data-local-dropzone="true"
         className={[
           'mt-4 rounded-xl border border-dashed p-6 text-center transition-colors',
           isDragActive ? 'border-gold/50 bg-gold/5' : 'border-border bg-black/20',
