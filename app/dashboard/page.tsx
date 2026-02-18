@@ -107,6 +107,8 @@ export const DashboardPage: React.FC = () => {
   }, [filters.tags]);
 
   const [activeFolderId, setActiveFolderId] = useState<string | undefined>(undefined);
+  const [rootMode, setRootMode] = useState<'folders' | 'unfoldered'>('folders');
+  const [folderSearch, setFolderSearch] = useState('');
   const { options } = useFilterOptions(type, activeFolderId);
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
@@ -131,14 +133,17 @@ export const DashboardPage: React.FC = () => {
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
 
+  const shouldShowAssets = Boolean(activeFolderId || rootMode === 'unfoldered');
+  const effectiveFolderId = typeof activeFolderId === 'string' ? activeFolderId : null;
+
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: activeFolderId ?? undefined,
-    tagsAny,
-    metaFilters: filters.meta,
-    query: q ? q : null,
+    folderId: effectiveFolderId,
+    tagsAny: shouldShowAssets ? tagsAny : null,
+    metaFilters: shouldShowAssets ? filters.meta : null,
+    query: shouldShowAssets ? (q ? q : null) : null,
     limit: 120,
-  }), [type, activeFolderId, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+  }), [type, effectiveFolderId, shouldShowAssets, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
   const { assets: scopedAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
@@ -159,11 +164,11 @@ export const DashboardPage: React.FC = () => {
   }, [folders, type]);
 
   const foldersFiltered = useMemo(() => {
-    const qq = (q ?? '').trim().toLowerCase();
+    const qq = folderSearch.trim().toLowerCase();
     let next = !qq ? foldersForCategory : foldersForCategory.filter((f) => f.name.toLowerCase().includes(qq));
     if (foldersSort === 'za') next = [...next].reverse();
     return next;
-  }, [foldersForCategory, q, foldersSort]);
+  }, [foldersForCategory, folderSearch, foldersSort]);
 
   useEffect(() => {
     let mounted = true;
@@ -510,7 +515,7 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
-                 {type && (
+                 {type && shouldShowAssets && (
                    <FiltersBar
                      type={type}
                      value={filters}
@@ -569,6 +574,41 @@ export const DashboardPage: React.FC = () => {
                          <option value="za">Z–A</option>
                        </select>
 
+                       {!activeFolderId && (
+                         <div className="flex items-center gap-2">
+                           <input
+                             className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white w-64"
+                             placeholder="Buscar pastas..."
+                             value={folderSearch}
+                             onChange={(e) => setFolderSearch(e.target.value)}
+                           />
+
+                           <button
+                             className={[
+                               'px-3 py-2 rounded-lg border',
+                               rootMode === 'folders'
+                                 ? 'border-gold/40 bg-black/50 text-white'
+                                 : 'border-border bg-black/30 text-gray-200 hover:border-gold/30',
+                             ].join(' ')}
+                             onClick={() => setRootMode('folders')}
+                           >
+                             Pastas
+                           </button>
+
+                           <button
+                             className={[
+                               'px-3 py-2 rounded-lg border',
+                               rootMode === 'unfoldered'
+                                 ? 'border-gold/40 bg-black/50 text-white'
+                                 : 'border-border bg-black/30 text-gray-200 hover:border-gold/30',
+                             ].join(' ')}
+                             onClick={() => setRootMode('unfoldered')}
+                           >
+                             Soltos
+                           </button>
+                         </div>
+                       )}
+
                       <button
                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
                         onClick={() => setNewFolderOpen(true)}
@@ -579,7 +619,7 @@ export const DashboardPage: React.FC = () => {
                    </div>
 
                    {/* ✅ Folder cards: só aparecem na RAIZ (como Drive) */}
-                   {!activeFolderId && (
+                   {!activeFolderId && rootMode === "folders" && (
                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                        {foldersFiltered.map((f) => {
                          const isOver = dragOverFolderId === f.id && !!draggingAssetId;
@@ -610,6 +650,7 @@ export const DashboardPage: React.FC = () => {
                                className="w-full text-left p-4 flex items-center gap-3"
                                onClick={() => {
                                  setActiveFolderId(f.id);
+                                 setRootMode('folders');
                                  setFolderMenuOpenId(null);
                                }}
                              >
@@ -753,31 +794,33 @@ export const DashboardPage: React.FC = () => {
                  )}
 
                  {/* Asset Grid */}
-                 <div
-                   className="mt-6"
-                   onDragOver={(e) => {
-                     if (activeFolderId && draggingAssetId) e.preventDefault();
-                   }}
-                   onDrop={async (e) => {
-                     if (!activeFolderId) return;
-                     await handleDropOnFolder(null, e);
-                   }}
-                 >
-                  <AssetGrid
-                    assets={scopedAssets}
-                    selectedIds={selectedIds}
-                    selectionMode={selectionMode}
-                    onToggleSelect={handleToggleSelect}
-                    onMarqueeSelect={handleMarqueeSelect}
-                    onDeleted={refresh}
-                    onDragStart={onDragStartAsset}
-                  />
-                  {scopedAssets.length === 0 && (
-                    <div className="text-gray-500 text-sm mt-3">
-                      {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
-                    </div>
-                  )}
-                 </div>
+                 {shouldShowAssets && (
+                   <div
+                     className="mt-6"
+                     onDragOver={(e) => {
+                       if (activeFolderId && draggingAssetId) e.preventDefault();
+                     }}
+                     onDrop={async (e) => {
+                       if (!activeFolderId) return;
+                       await handleDropOnFolder(null, e);
+                     }}
+                   >
+                    <AssetGrid
+                      assets={scopedAssets}
+                      selectedIds={selectedIds}
+                      selectionMode={selectionMode}
+                      onToggleSelect={handleToggleSelect}
+                      onMarqueeSelect={handleMarqueeSelect}
+                      onDeleted={refresh}
+                      onDragStart={onDragStartAsset}
+                    />
+                    {scopedAssets.length === 0 && (
+                      <div className="text-gray-500 text-sm mt-3">
+                        {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
+                      </div>
+                    )}
+                   </div>
+                 )}
              </div>
          )}
       </section>
