@@ -72,13 +72,11 @@ export const AssetGrid: React.FC<Props> = ({
   const onMouseDown = (e: React.MouseEvent) => {
     if (!(e.target instanceof HTMLElement)) return;
 
-    // não iniciar marquee ao clicar em um card
-    const insideCard = e.target.closest('[data-asset-card]');
-    if (insideCard) return;
+    // NÃO iniciar marquee se clicar em um card
+    if (e.target.closest('[data-asset-card]')) return;
 
-    // nem em zonas bloqueadas (ações)
-    const blocked = e.target.closest('[data-no-marquee]');
-    if (blocked) return;
+    // NÃO iniciar se clicar em zona bloqueada (ações)
+    if (e.target.closest('[data-no-marquee]')) return;
 
     if (e.button !== 0) return;
 
@@ -141,7 +139,7 @@ export const AssetGrid: React.FC<Props> = ({
   return (
     <div
       ref={containerRef}
-      className="relative p-4"
+      className="relative px-6 pt-12 pb-6 rounded-2xl bg-white/[0.02] border border-white/[0.04]"
       onMouseDown={onMouseDown}
     >
       {/* marquee overlay */}
@@ -152,7 +150,7 @@ export const AssetGrid: React.FC<Props> = ({
         />
       )}
 
-      <div className="-m-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {assets.map((asset) => (
           <div key={asset.id} ref={setItemRef(asset.id)} data-asset-card>
             <AssetCard
