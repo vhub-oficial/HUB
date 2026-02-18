@@ -100,13 +100,21 @@ export const AssetCard: React.FC<Props> = ({
     (async () => {
       try {
         if (!organizationId) return;
+
         if (isExternal(asset)) {
           const thumb = asset.meta?.thumbnail_url || '';
           if (mounted) setSrc(thumb);
           return;
         }
+
+        const thumbPath = (asset.meta as any)?.thumbnail_path as string | undefined;
+        if (!thumbPath) {
+          if (mounted) setSrc('');
+          return;
+        }
+
         const bucket = getOrgBucketName(organizationId);
-        const signed = await createSignedUrl(bucket, asset.url, 3600);
+        const signed = await createSignedUrl(bucket, thumbPath, 3600);
         if (mounted) setSrc(signed);
       } catch {
         if (mounted) setSrc('');
@@ -115,7 +123,7 @@ export const AssetCard: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, [organizationId, asset.url]);
+  }, [organizationId, asset.url, (asset.meta as any)?.thumbnail_path]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
@@ -306,15 +314,14 @@ export const AssetCard: React.FC<Props> = ({
       </div>
 
       <div className="relative aspect-video bg-black/60 overflow-hidden">
-        {!isExternal(asset) && src ? (
-          <video
+        {isExternal(asset) && src ? (
+          <img
             src={src}
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-            muted
-            playsInline
-            preload="metadata"
+            alt={asset.name}
+            loading="lazy"
           />
-        ) : isExternal(asset) && src ? (
+        ) : !isExternal(asset) && src ? (
           <img
             src={src}
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"

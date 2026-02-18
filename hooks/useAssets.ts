@@ -5,6 +5,84 @@ import { getOrgBucketName } from '../lib/storageHelpers';
 
 let disableActivityLogs = false;
 
+async function imageFileToThumbWebp(file: File, maxW = 640): Promise<Blob> {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  try {
+    await new Promise<void>((res, rej) => {
+      img.onload = () => res();
+      img.onerror = () => rej(new Error('image_load_failed'));
+      img.src = url;
+    });
+
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no_canvas');
+
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const blob = await new Promise<Blob>((res, rej) => {
+      canvas.toBlob((b) => (b ? res(b) : rej(new Error('thumb_blob_failed'))), 'image/webp', 0.82);
+    });
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 640): Promise<Blob> {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise<void>((res, rej) => {
+      video.onloadedmetadata = () => res();
+      video.onerror = () => rej(new Error('video_meta_failed'));
+      video.src = url;
+    });
+
+    const t = Math.min(Math.max(seekSeconds, 0), Math.max(0, (video.duration || 0) - 0.1));
+    video.currentTime = t;
+
+    await new Promise<void>((res, rej) => {
+      const onSeeked = () => res();
+      const onErr = () => rej(new Error('video_seek_failed'));
+      video.onseeked = onSeeked;
+      video.onerror = onErr;
+    });
+
+    const scale = Math.min(1, maxW / video.videoWidth);
+    const w = Math.max(1, Math.round(video.videoWidth * scale));
+    const h = Math.max(1, Math.round(video.videoHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no_canvas');
+
+    ctx.drawImage(video, 0, 0, w, h);
+
+    const blob = await new Promise<Blob>((res, rej) => {
+      canvas.toBlob((b) => (b ? res(b) : rej(new Error('thumb_blob_failed'))), 'image/webp', 0.82);
+    });
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export type AssetRow = {
   id: string;
   name: string;
@@ -167,6 +245,36 @@ export function useAssets(args?: AssetsArgs) {
       });
     if (upErr) throw upErr;
 
+    let thumbnailPath: string | null = null;
+
+    try {
+      const isImg = file.type?.startsWith('image/');
+      const isVid = file.type?.startsWith('video/');
+
+      if (isImg || isVid) {
+        const thumbBlob = isImg
+          ? await imageFileToThumbWebp(file, 640)
+          : await videoFileToThumbWebp(file, 0.5, 640);
+
+        const thumbFile = new File([thumbBlob], 'thumb.webp', { type: 'image/webp' });
+
+        const thumbName = `${crypto.randomUUID()}-thumb.webp`;
+        thumbnailPath = `${folderPath}/thumbs/${thumbName}`;
+
+        const upThumb = await supabase.storage.from(bucket).upload(thumbnailPath, thumbFile, {
+          upsert: false,
+          contentType: 'image/webp',
+          cacheControl: '31536000',
+        });
+
+        if (upThumb.error) {
+          thumbnailPath = null;
+        }
+      }
+    } catch {
+      thumbnailPath = null;
+    }
+
     // 2) Insert in assets
     // IMPORTANT: store objectPath in assets.url (private storage). UI will create signed URL for preview/download.
     const sizeMb = file.size / (1024 * 1024);
@@ -191,6 +299,7 @@ export function useAssets(args?: AssetsArgs) {
           source: 'storage',
           original_name: file.name,
           mime_type: file.type || null,
+          ...(thumbnailPath ? { thumbnail_path: thumbnailPath, thumbnail_mime: 'image/webp' } : {}),
           ...((opts.meta ?? {}) as any),
         },
       })
