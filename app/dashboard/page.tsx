@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders } from '../../hooks/useFolders';
 import { NewFolderModal } from '../../components/Folders/NewFolderModal';
-import { AssetCard } from '../../components/Assets/AssetCard';
+import { AssetGrid } from '../../components/Assets/AssetGrid';
 import { Loader2, Users, Mic, Video, Smartphone, Music, Speaker, Clapperboard, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -127,8 +127,9 @@ export const DashboardPage: React.FC = () => {
   const [isBusyMove, setIsBusyMove] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [anchorIndex, setAnchorIndex] = React.useState<number | null>(null);
+
   const selectionMode = selectedIds.size > 0;
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
@@ -166,47 +167,94 @@ export const DashboardPage: React.FC = () => {
     return next;
   }, [foldersForCategory, q, foldersSort]);
 
-  const scopedList = scopedAssets;
-  const toggleSelect = (assetId: string, e: React.MouseEvent) => {
-    const idx = scopedList.findIndex((a) => a.id === assetId);
-    const isMeta = e.metaKey || e.ctrlKey;
+  const scopedIdToIndex = React.useMemo(() => {
+    const map = new Map<string, number>();
+    scopedAssets.forEach((a, idx) => map.set(a.id, idx));
+    return map;
+  }, [scopedAssets]);
 
+  React.useEffect(() => {
+    // remove selected ids that are no longer visible in current scope
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-
-      if (e.shiftKey && lastSelectedIndex !== null && idx >= 0) {
-        const a = Math.min(lastSelectedIndex, idx);
-        const b = Math.max(lastSelectedIndex, idx);
-        for (let i = a; i <= b; i++) next.add(scopedList[i].id);
-        return next;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (scopedIdToIndex.has(id)) next.add(id);
       }
-
-      if (isMeta) {
-        if (next.has(assetId)) next.delete(assetId);
-        else next.add(assetId);
-        return next;
-      }
-
-      if (next.size <= 1 && next.has(assetId)) {
-        return next;
-      }
-      next.clear();
-      next.add(assetId);
       return next;
     });
 
-    if (idx >= 0) setLastSelectedIndex(idx);
-  };
+    // reset anchor if it points outside new list
+    setAnchorIndex((prev) => {
+      if (prev == null) return null;
+      if (prev < 0 || prev >= scopedAssets.length) return null;
+      return prev;
+    });
+  }, [scopedAssets, scopedIdToIndex]);
+
+  const handleToggleSelect = React.useCallback(
+    (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => {
+      const idx = scopedIdToIndex.get(assetId);
+      if (idx == null) return;
+
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+
+        const isMultiKey = ev.meta || ev.ctrl;
+
+        // SHIFT: range select between anchor and current
+        if (ev.shift && anchorIndex != null) {
+          const a = Math.min(anchorIndex, idx);
+          const b = Math.max(anchorIndex, idx);
+
+          // Drive behavior:
+          // - If user also holds Ctrl/Cmd, ADD range
+          // - else REPLACE with range
+          const base = isMultiKey ? new Set(next) : new Set<string>();
+          for (let i = a; i <= b; i++) {
+            const id = scopedAssets[i]?.id;
+            if (id) base.add(id);
+          }
+          return base;
+        }
+
+        // Ctrl/Cmd: toggle single
+        if (isMultiKey) {
+          if (next.has(assetId)) next.delete(assetId);
+          else next.add(assetId);
+          return next;
+        }
+
+        // normal click when already in selection mode:
+        // replace with single
+        return new Set([assetId]);
+      });
+
+      setAnchorIndex(idx);
+    },
+    [scopedAssets, scopedIdToIndex, anchorIndex]
+  );
+
+  const handleMarqueeSelect = React.useCallback(
+    (ids: string[], mode: 'replace' | 'add') => {
+      setSelectedIds((prev) => {
+        const next = mode === 'add' ? new Set(prev) : new Set<string>();
+        for (const id of ids) next.add(id);
+        return next;
+      });
+
+      // set anchor as last id in ids (Drive-ish)
+      const last = ids[ids.length - 1];
+      const idx = scopedIdToIndex.get(last);
+      if (idx != null) setAnchorIndex(idx);
+    },
+    [scopedIdToIndex]
+  );
 
   const onDragStartAsset = (e: React.DragEvent, assetId: string) => {
     setDraggingAssetId(assetId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const onDragEndAsset = () => {
-    setDraggingAssetId(null);
-    setDragOverFolderId(null);
-  };
 
   // helper: pega assetId do drag
   const getDraggedAssetId = (e: React.DragEvent) => {
@@ -792,28 +840,23 @@ export const DashboardPage: React.FC = () => {
                      await handleDropToUnfiled(e);
                    }}
                  >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {scopedAssets.map((asset) => (
-                      <AssetCard
-                        key={asset.id}
-                        asset={asset}
-                        onDeleted={refresh}
-                        onDragStart={onDragStartAsset}
-                        onDragEnd={onDragEndAsset}
-                        selectionMode={selectionMode}
-                        selected={selectedIds.has(asset.id)}
-                        onToggleSelect={(id, e) => toggleSelect(id, e)}
-                        onMoveToRoot={
-                          activeFolderId
-                            ? async () => {
-                                await moveAssetToFolder(asset.id, null);
-                                refresh();
-                              }
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
+                  <AssetGrid
+                    assets={scopedAssets}
+                    selectedIds={selectedIds}
+                    selectionMode={selectionMode}
+                    onToggleSelect={handleToggleSelect}
+                    onMarqueeSelect={handleMarqueeSelect}
+                    onDeleted={refresh}
+                    onDragStart={onDragStartAsset}
+                    onMoveToRoot={
+                      activeFolderId
+                        ? async (assetId: string) => {
+                            await moveAssetToFolder(assetId, null);
+                            refresh();
+                          }
+                        : undefined
+                    }
+                  />
                   {scopedAssets.length === 0 && (
                     <div className="text-gray-500 text-sm mt-3">
                       {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
