@@ -18,7 +18,7 @@ const SPEC_META_KEYS: Record<string, string[]> = {
   ugc: ['genero_ator', 'faixa_etaria'],
 };
 
-export function useFilterOptions(type?: string) {
+export function useFilterOptions(type?: string, folderId?: string | null) {
   const { organizationId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Options>({ tags: [], meta: {} });
@@ -34,13 +34,21 @@ export function useFilterOptions(type?: string) {
       setLoading(true);
       try {
         // Snapshot da aba (sem filtros), limite alto o suficiente pro MVP
-        const { data, error } = await supabase
+        let query = supabase
           .from('assets')
           .select('tags, meta')
           .eq('organization_id', organizationId)
           .eq('type', type)
           .order('created_at', { ascending: false })
           .limit(500);
+
+        if (typeof folderId === 'string') {
+          query = query.eq('folder_id', folderId);
+        } else if (folderId === null) {
+          query = query.is('folder_id', null);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -83,7 +91,7 @@ export function useFilterOptions(type?: string) {
     return () => {
       mounted = false;
     };
-  }, [organizationId, type]);
+  }, [organizationId, type, folderId]);
 
   return useMemo(() => ({ loading, options }), [loading, options]);
 }

@@ -67,16 +67,15 @@ export function useAssets(args?: AssetsArgs) {
       // - folderId === undefined => no folder filter
       if (a.onlyUnfoldered) {
         q = q.is('folder_id', null);
+      } else if (typeof a.folderId === 'string') {
+        q = q.eq('folder_id', a.folderId);
+      } else if (a.folderId === null) {
+        q = q.is('folder_id', null);
       }
-      if (a.folderId) q = q.eq('folder_id', a.folderId);
-      else if (a.folderId === null) q = q.is('folder_id', null);
 
       // Category / Aba
       if (a.type) {
         q = q.eq('type', a.type);
-      }
-      if (a.folderId) {
-        q = q.eq('folder_id', a.folderId);
       }
       // Free tags[] (ANY tag can match) — better UX for filters
       if (a.tagsAny && a.tagsAny.length) {

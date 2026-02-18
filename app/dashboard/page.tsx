@@ -106,10 +106,9 @@ export const DashboardPage: React.FC = () => {
     return [filters.tags.trim()];
   }, [filters.tags]);
 
-  const { options } = useFilterOptions(type);
+  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(undefined);
+  const { options } = useFilterOptions(type, activeFolderId);
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
-  // ✅ novo estado: pasta ativa (quando null, mostra "soltos")
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [folderMenuOpenId, setFolderMenuOpenId] = useState<string | null>(null); // menu (...) no card
@@ -134,7 +133,7 @@ export const DashboardPage: React.FC = () => {
 
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: activeFolderId ?? null,
+    folderId: activeFolderId ?? undefined,
     tagsAny,
     metaFilters: filters.meta,
     query: q ? q : null,
@@ -393,7 +392,7 @@ export const DashboardPage: React.FC = () => {
 
     if (activeFolderId === folderId) {
       setFolderMenuOpenId(null);
-      setActiveFolderId(null);
+      setActiveFolderId(undefined);
     }
 
     refresh();
@@ -530,7 +529,7 @@ export const DashboardPage: React.FC = () => {
                          <div className="mt-3 flex items-center gap-2 flex-wrap">
                            <button
                              className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
-                             onClick={() => setActiveFolderId(null)}
+                             onClick={() => setActiveFolderId(undefined)}
                              onDragOver={(e) => e.preventDefault()}
                              onDrop={(e) => handleDropOnFolder(null, e)}
                              title="Raiz da categoria"
