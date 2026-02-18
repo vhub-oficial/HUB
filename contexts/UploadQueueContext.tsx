@@ -35,7 +35,7 @@ const genId = () => {
   return `uq_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 };
 
-const fileFingerprint = (f: File) => `${f.name}::${f.size}::${f.lastModified}`;
+const fileFingerprint = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
 
 export function UploadQueueProvider({ children }: { children: React.ReactNode }) {
   const { role } = useAuth();
@@ -44,7 +44,18 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const [items, setItems] = useState<UploadQueueItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
+  // Always-current snapshot (avoids stale closure)
+  const itemsRef = useRef<UploadQueueItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  // Single-flight runner lock
   const runningRef = useRef(false);
+
+  // Simple dedupe cache (prevents same file enqueue multiple times)
+  const seenRef = useRef<Record<string, number>>({});
+
   const cancelRef = useRef<Record<string, boolean>>({});
 
   const open = useCallback(() => setIsOpen(true), []);
@@ -62,20 +73,20 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     }
 
     setItems((prev) => {
-      const existing = new Set(
-        prev
-          .filter((x) => x.status === 'queued' || x.status === 'uploading')
-          .map((x) => fileFingerprint(x.file)),
-      );
-
-      const localSeen = new Set<string>();
       const next = [...prev];
 
       for (const f of files) {
+        // ignore empty / weird
+        if (!f || !f.name || !f.size) continue;
+
+        // dedupe (same file selected/dropped multiple times)
         const fp = fileFingerprint(f);
-        if (existing.has(fp)) continue;
-        if (localSeen.has(fp)) continue;
-        localSeen.add(fp);
+        const now = Date.now();
+        const last = seenRef.current[fp] ?? 0;
+        if (now - last < 60_000) {
+          continue;
+        }
+        seenRef.current[fp] = now;
 
         next.push({
           id: genId(),
@@ -103,30 +114,34 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     setItems((prev) => prev.filter((x) => !['done', 'error', 'canceled'].includes(x.status)));
   }, []);
 
-  // Runner: processa 1 por vez (mais confiável)
   useEffect(() => {
+    // Start runner only when there is queued work and not already running
+    const hasQueued = items.some((x) => x.status === 'queued');
+    if (!hasQueued) return;
     if (runningRef.current) return;
-    if (!items.some((x) => x.status === 'queued')) return;
 
     runningRef.current = true;
 
     (async () => {
       try {
-        while (true) {
-          const next = (() => {
-            const queued = items.filter((x) => x.status === 'queued');
-            if (!queued.length) return null;
-            // oldest first
-            queued.sort((a, b) => a.createdAt - b.createdAt);
-            return queued[0];
-          })();
-
+        // Loop until no queued items remain (always read from itemsRef)
+        // Safety guard against infinite loops
+        let guard = 0;
+        while (guard < 500) {
+          guard += 1;
+          const snapshot = itemsRef.current;
+          const next = snapshot.find((x) => x.status === 'queued');
           if (!next) break;
+
+          // canceled before start
           if (cancelRef.current[next.id]) {
-            setItems((prev) => prev.map((x) => (x.id === next.id ? { ...x, status: 'canceled' } : x)));
+            setItems((prev) =>
+              prev.map((x) => (x.id === next.id ? { ...x, status: 'canceled', error: 'Cancelado' } : x))
+            );
             continue;
           }
 
+          // mark uploading BEFORE calling uploadAsset (prevents double-pick)
           setItems((prev) =>
             prev.map((x) => (x.id === next.id ? { ...x, status: 'uploading', progress: 10, error: null } : x))
           );
@@ -143,11 +158,17 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
               meta: { source: 'storage', needs_review: true, inbox: true },
             });
 
-            setItems((prev) =>
-              prev.map((x) => (x.id === next.id ? { ...x, status: 'done', progress: 100 } : x))
-            );
-
-            window.dispatchEvent(new Event('vah:assets_changed'));
+            // if canceled during upload, don't mark done
+            if (cancelRef.current[next.id]) {
+              setItems((prev) =>
+                prev.map((x) => (x.id === next.id ? { ...x, status: 'canceled', error: 'Cancelado' } : x))
+              );
+            } else {
+              setItems((prev) =>
+                prev.map((x) => (x.id === next.id ? { ...x, status: 'done', progress: 100, error: null } : x))
+              );
+              window.dispatchEvent(new Event('vah:assets_changed'));
+            }
           } catch (e: any) {
             setItems((prev) =>
               prev.map((x) =>
@@ -160,8 +181,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
         runningRef.current = false;
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [items, uploadAsset]);
 
   const value = useMemo<Ctx>(() => ({
     items,
