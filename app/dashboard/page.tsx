@@ -89,6 +89,16 @@ export const DashboardPage: React.FC = () => {
     return () => window.removeEventListener('mousedown', onDown, true);
   }, []);
 
+  React.useEffect(() => {
+    const onDown = (ev: MouseEvent) => {
+      if (!(ev.target instanceof HTMLElement)) return;
+      if (ev.target.closest('[data-grid-menu]')) return;
+      setGridMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDown, true);
+    return () => window.removeEventListener('mousedown', onDown, true);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -150,6 +160,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = React.useState<number | null>(null);
   const [gridDensity, setGridDensity] = React.useState<'compact' | 'default' | 'large'>('default');
+  const [gridMenuOpen, setGridMenuOpen] = React.useState(false);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -601,42 +612,54 @@ export const DashboardPage: React.FC = () => {
                          <option value="za">Z–A</option>
                        </select>
 
-                      <div className="relative group">
-                        <div
+                      <div className="relative" data-grid-menu>
+                        <button
+                          type="button"
                           className="flex items-center gap-2 bg-black/40 border border-border rounded-lg px-3 py-2 text-white cursor-pointer hover:border-gold/40 transition-colors"
                           title="Visualização do grid"
+                          onClick={() => setGridMenuOpen((v) => !v)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.6"/>
-                            <rect x="14" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.6"/>
-                            <rect x="3" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.6"/>
-                            <rect x="14" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.6"/>
+                            <rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+                            <rect x="14" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+                            <rect x="3" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+                            <rect x="14" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
                           </svg>
+
                           <span className="text-sm font-medium">
                             {gridDensity === 'compact' && 'Compacto'}
                             {gridDensity === 'default' && 'Padrão'}
                             {gridDensity === 'large' && 'Grande'}
                           </span>
-                        </div>
 
-                        <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-black/90 backdrop-blur p-2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-30">
-                          {(['compact', 'default', 'large'] as const).map((mode) => (
-                            <button
-                              key={mode}
-                              className={[
-                                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
-                                gridDensity === mode
-                                  ? 'bg-white/10 text-white'
-                                  : 'text-gray-300 hover:bg-white/5'
-                              ].join(' ')}
-                              onClick={() => setGridDensity(mode)}
-                            >
-                              {mode === 'compact' && 'Compacto'}
-                              {mode === 'default' && 'Padrão'}
-                              {mode === 'large' && 'Grande'}
-                            </button>
-                          ))}
-                        </div>
+                          {/* caret */}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="opacity-80">
+                            <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+
+                        {gridMenuOpen && (
+                          <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-black/90 backdrop-blur p-2 z-30">
+                            {(['compact', 'default', 'large'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                className={[
+                                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                                  gridDensity === mode ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5',
+                                ].join(' ')}
+                                onClick={() => {
+                                  setGridDensity(mode);
+                                  setGridMenuOpen(false);
+                                }}
+                              >
+                                {mode === 'compact' && 'Compacto'}
+                                {mode === 'default' && 'Padrão'}
+                                {mode === 'large' && 'Grande'}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                        {!activeFolderId && (
