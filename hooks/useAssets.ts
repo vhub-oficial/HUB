@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrgBucketName } from '../lib/storageHelpers';
 
+let disableActivityLogs = false;
+
 export type AssetRow = {
   id: string;
   name: string;
@@ -220,15 +222,21 @@ export function useAssets(args?: AssetsArgs) {
 
     // 4) Activity log (best-effort)
     try {
-      await supabase.from('activity_logs').insert({
-        user_id: user.id,
-        action: 'upload',
-        asset_id: inserted?.id ?? null,
-        description: `Upload: ${file.name}`,
-        timestamp: new Date().toISOString(),
-      });
+      if (!disableActivityLogs) {
+        const { error: logErr } = await supabase.from('activity_logs').insert({
+          user_id: user.id,
+          action: 'upload',
+          asset_id: inserted?.id ?? null,
+          description: `Upload: ${file.name}`,
+          timestamp: new Date().toISOString(),
+        });
+        if (logErr) {
+          // stop spamming 400s for the rest of the session
+          disableActivityLogs = true;
+        }
+      }
     } catch {
-      // ignore logging failure
+      disableActivityLogs = true;
     }
 
     return (inserted?.id ?? assetId) as string;

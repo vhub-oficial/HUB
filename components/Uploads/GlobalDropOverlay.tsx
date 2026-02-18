@@ -10,6 +10,7 @@ type Props = {
 export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Props) {
   const { enqueueFiles, open } = useUploadQueue();
   const [dragging, setDragging] = React.useState(false);
+  const dragDepth = React.useRef(0);
 
   React.useEffect(() => {
     if (!enabled) return;
@@ -17,6 +18,9 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
     const onDragEnter = (e: DragEvent) => {
       if (!e.dataTransfer) return;
       if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth.current += 1;
       setDragging(true);
     };
 
@@ -24,16 +28,21 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
       if (!e.dataTransfer) return;
       if (!Array.from(e.dataTransfer.types).includes('Files')) return;
       e.preventDefault();
+      e.stopPropagation();
+      // keep visible
       setDragging(true);
     };
 
-    const onDragLeave = () => {
-      setDragging(false);
+    const onDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragging(false);
     };
 
     const onDrop = (e: DragEvent) => {
-      // Sempre fecha o overlay quando houver drop.
-      setDragging(false);
+      e.preventDefault();
+      e.stopPropagation();
 
       try {
         if (!e.dataTransfer) return;
@@ -47,10 +56,6 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
 
         const files = Array.from(e.dataTransfer.files ?? []);
         if (!files.length) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
         if (!categoryType) {
           alert('Selecione uma categoria antes de soltar arquivos.');
           return;
@@ -58,10 +63,8 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
 
         enqueueFiles(files, { categoryType, folderId });
         open();
-      } catch {
-        // ignore
       } finally {
-        // Redundância para garantir que nunca fica travado no overlay.
+        dragDepth.current = 0;
         setDragging(false);
       }
     };
