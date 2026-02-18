@@ -32,32 +32,38 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
     };
 
     const onDrop = (e: DragEvent) => {
-      if (!e.dataTransfer) return;
-
-      // Se algum handler local já marcou preventDefault, não processa aqui.
-      if (e.defaultPrevented) return;
-
-      // Se o drop aconteceu dentro de um dropzone local, ignora.
-      const t = e.target as Element | null;
-      if (t && typeof (t as any).closest === 'function') {
-        const insideLocalDropzone = (t as any).closest('[data-local-dropzone="true"]');
-        if (insideLocalDropzone) return;
-      }
-
-      const files = Array.from(e.dataTransfer.files ?? []);
+      // Sempre fecha o overlay quando houver drop.
       setDragging(false);
-      if (!files.length) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+      try {
+        if (!e.dataTransfer) return;
 
-      if (!categoryType) {
-        alert('Selecione uma categoria antes de soltar arquivos.');
-        return;
+        // Se o drop aconteceu dentro de um dropzone local, ignora.
+        const t = e.target as Element | null;
+        if (t && typeof (t as any).closest === 'function') {
+          const insideLocalDropzone = (t as any).closest('[data-local-dropzone="true"]');
+          if (insideLocalDropzone) return;
+        }
+
+        const files = Array.from(e.dataTransfer.files ?? []);
+        if (!files.length) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!categoryType) {
+          alert('Selecione uma categoria antes de soltar arquivos.');
+          return;
+        }
+
+        enqueueFiles(files, { categoryType, folderId });
+        open();
+      } catch {
+        // ignore
+      } finally {
+        // Redundância para garantir que nunca fica travado no overlay.
+        setDragging(false);
       }
-
-      enqueueFiles(files, { categoryType, folderId });
-      open();
     };
 
     window.addEventListener('dragenter', onDragEnter);
