@@ -10,17 +10,17 @@ type Props = {
   asset: AssetRow;
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
-  onDragEnd?: () => void;
   onMoveToRoot?: () => void;
-  selectionMode?: boolean;
+
+  // ✅ Drive selection
   selected?: boolean;
-  onToggleSelect?: (assetId: string, e: React.MouseEvent) => void;
+  selectionMode?: boolean;
+  onToggleSelect?: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
 };
 
 const isExternal = (asset: AssetRow) => {
   const source = asset.meta?.source;
   if (source === 'external') return true;
-  // fallback: if url is full http(s), treat as external
   return typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url);
 };
 
@@ -59,10 +59,9 @@ export const AssetCard: React.FC<Props> = ({
   asset,
   onDeleted,
   onDragStart,
-  onDragEnd,
   onMoveToRoot,
-  selectionMode,
-  selected,
+  selected = false,
+  selectionMode = false,
   onToggleSelect,
 }) => {
   const navigate = useNavigate();
@@ -72,19 +71,16 @@ export const AssetCard: React.FC<Props> = ({
 
   const handleDownload = React.useCallback(async () => {
     try {
-      // External: abre o link (download direto depende do provider)
       if (isExternal(asset)) {
         const direct = asset.meta?.download_url || asset.url;
         window.open(direct, '_blank', 'noopener,noreferrer');
         return;
       }
-      // Storage: gera signed URL e força download
       if (!organizationId) return;
       const bucket = getOrgBucketName(organizationId);
       const signed = await createSignedUrl(bucket, asset.url, 3600);
       const filename = buildDownloadName(asset);
 
-      // força download via blob (mais confiável que <a download> com cross-origin)
       const res = await fetch(signed);
       if (!res.ok) throw new Error('download_failed');
       const blob = await res.blob();
@@ -97,7 +93,6 @@ export const AssetCard: React.FC<Props> = ({
       a.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
     } catch {
-      // fallback: se algo der errado, tenta abrir a página de detalhe
       navigate(`/assets/${asset.id}`);
     }
   }, [asset, organizationId, navigate]);
@@ -108,7 +103,6 @@ export const AssetCard: React.FC<Props> = ({
       try {
         if (!organizationId) return;
         if (isExternal(asset)) {
-          // for external assets, prefer thumbnail_url if provided
           const thumb = asset.meta?.thumbnail_url || '';
           if (mounted) setSrc(thumb);
           return;
@@ -125,6 +119,23 @@ export const AssetCard: React.FC<Props> = ({
     };
   }, [organizationId, asset.url]);
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const meta = e.metaKey;
+    const ctrl = e.ctrlKey;
+    const shift = e.shiftKey;
+
+    // ✅ Drive rule:
+    // - If user is selecting (selectionMode) OR uses Ctrl/Cmd OR Shift: don't navigate, toggle/select.
+    if (selectionMode || meta || ctrl || shift) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect?.(asset.id, { shift, meta, ctrl });
+      return;
+    }
+
+    navigate(`/assets/${asset.id}`);
+  };
+
   return (
     <button
       draggable
@@ -133,33 +144,14 @@ export const AssetCard: React.FC<Props> = ({
         e.dataTransfer.setData('text/plain', asset.id);
         if (onDragStart) onDragStart(e, asset.id);
       }}
-      onDragEnd={() => {
-        if (onDragEnd) onDragEnd();
-      }}
-      onClick={(e) => {
-        if (selectionMode && onToggleSelect) {
-          e.preventDefault();
-          e.stopPropagation();
-          onToggleSelect(asset.id, e as any);
-          return;
-        }
-        navigate(`/assets/${asset.id}`);
-      }}
-      className={`group text-left rounded-xl overflow-hidden bg-surface border border-border hover:border-gold/40 transition-colors relative ${selected ? 'ring-2 ring-gold/30 border-gold/60' : ''}`}
+      onClick={handleCardClick}
+      className={[
+        'group text-left rounded-xl overflow-hidden bg-surface border transition-colors relative',
+        selected ? 'border-gold/70 ring-2 ring-gold/30' : 'border-border hover:border-gold/40',
+      ].join(' ')}
+      aria-selected={selected ? 'true' : 'false'}
     >
       {/* Quick actions */}
-      {selectionMode && (
-        <div className="absolute top-2 left-2 z-10">
-          <div
-            className={[
-              'w-6 h-6 rounded-md border flex items-center justify-center',
-              selected ? 'bg-gold/20 border-gold/50' : 'bg-black/40 border-border',
-            ].join(' ')}
-          >
-            {selected ? <span className="text-gold text-sm">✓</span> : null}
-          </div>
-        </div>
-      )}
       <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
@@ -172,6 +164,7 @@ export const AssetCard: React.FC<Props> = ({
         >
           <Download size={16} />
         </button>
+
         {(role === 'admin' || role === 'editor') && (
           <button
             className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
@@ -185,6 +178,7 @@ export const AssetCard: React.FC<Props> = ({
             <Pencil size={16} />
           </button>
         )}
+
         {onMoveToRoot && (
           <button
             className="px-3 py-1 rounded-md bg-black/50 border border-border text-white hover:border-gold/40 transition-colors"
@@ -198,6 +192,7 @@ export const AssetCard: React.FC<Props> = ({
             Raiz
           </button>
         )}
+
         {role === 'admin' && (
           <button
             className="w-9 h-9 rounded-lg bg-black/50 border border-border text-red-200 hover:border-red-500/40 flex items-center justify-center"
@@ -216,7 +211,6 @@ export const AssetCard: React.FC<Props> = ({
       </div>
 
       <div className="relative aspect-video bg-black/60 overflow-hidden">
-        {/* preview */}
         {!isExternal(asset) && src ? (
           <video
             src={src}
@@ -241,18 +235,12 @@ export const AssetCard: React.FC<Props> = ({
             <span className="text-xs text-gray-600">Abra para acessar</span>
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500">
-            Sem preview
-          </div>
+          <div className="w-full h-full flex items-center justify-center text-gray-500">Sem preview</div>
         )}
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center">
-            {isExternal(asset) ? (
-              <LinkIcon className="text-gold" size={22} />
-            ) : (
-              <Play className="text-gold" size={22} />
-            )}
+            {isExternal(asset) ? <LinkIcon className="text-gold" size={22} /> : <Play className="text-gold" size={22} />}
           </div>
         </div>
       </div>
