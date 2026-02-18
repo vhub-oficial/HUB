@@ -70,11 +70,10 @@ export const AssetGrid: React.FC<Props> = ({
   }, [assets, marquee]);
 
   const onMouseDown = (e: React.MouseEvent) => {
-    // Only start marquee when clicking the "empty space" of the grid,
-    // not when clicking a card/button.
+    // ✅ Start marquee anywhere EXCEPT interactive zones (actions, etc.)
     if (!(e.target instanceof HTMLElement)) return;
-    const insideCard = e.target.closest('[data-asset-card]'); // wrapper marker below
-    if (insideCard) return;
+    const blocked = e.target.closest('[data-no-marquee]');
+    if (blocked) return;
 
     // left mouse only
     if (e.button !== 0) return;

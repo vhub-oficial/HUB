@@ -255,8 +255,12 @@ export const AssetCard: React.FC<Props> = ({
       aria-selected={selected ? 'true' : 'false'}
     >
       {/* Quick actions */}
-      <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div
+        className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+        data-no-marquee
+      >
         <button
+          data-no-marquee
           className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
           onClick={(e) => {
             e.preventDefault();
@@ -270,6 +274,7 @@ export const AssetCard: React.FC<Props> = ({
 
         {(role === 'admin' || role === 'editor') && (
           <button
+            data-no-marquee
             className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
             onClick={(e) => {
               e.preventDefault();
@@ -284,6 +289,7 @@ export const AssetCard: React.FC<Props> = ({
 
         {role === 'admin' && (
           <button
+            data-no-marquee
             className="w-9 h-9 rounded-lg bg-black/50 border border-border text-red-200 hover:border-red-500/40 flex items-center justify-center"
             onClick={async (e) => {
               e.preventDefault();
