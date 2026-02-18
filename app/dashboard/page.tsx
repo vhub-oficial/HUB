@@ -848,14 +848,6 @@ export const DashboardPage: React.FC = () => {
                     onMarqueeSelect={handleMarqueeSelect}
                     onDeleted={refresh}
                     onDragStart={onDragStartAsset}
-                    onMoveToRoot={
-                      activeFolderId
-                        ? async (assetId: string) => {
-                            await moveAssetToFolder(assetId, null);
-                            refresh();
-                          }
-                        : undefined
-                    }
                   />
                   {scopedAssets.length === 0 && (
                     <div className="text-gray-500 text-sm mt-3">
