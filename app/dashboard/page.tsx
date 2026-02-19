@@ -224,6 +224,7 @@ export const DashboardPage: React.FC = () => {
     loadMore,
     refresh,
     moveAssetToFolder,
+    deleteAsset,
   } = useAssets(assetsArgs);
   const {
     folders,
@@ -512,13 +513,6 @@ export const DashboardPage: React.FC = () => {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
-
-  const downloadSelectedAsZip = async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) throw new Error('Nada selecionado.');
-    await downloadZipFromEdge({ ids, filename: `vhub-${type ?? 'assets'}-${Date.now()}` });
-  };
-
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -936,6 +930,19 @@ export const DashboardPage: React.FC = () => {
                  {/* Asset Grid */}
                  <div
                    className="mt-6"
+                   onMouseDown={(e) => {
+                     const target = e.target as HTMLElement;
+
+                     // Se clicou no menu de contexto, ignora
+                     if (target.closest('[data-selection-ctx-menu]')) return;
+
+                     // Se clicou dentro de um card, ignora
+                     if (target.closest('[data-asset-card]')) return;
+
+                     // Caso contrário, limpa seleção
+                     setSelectedIds(new Set());
+                     setAnchorIndex(null);
+                   }}
                    onDragOver={(e) => {
                      if (activeFolderId && draggingAssetId) e.preventDefault();
                    }}
@@ -1004,18 +1011,24 @@ export const DashboardPage: React.FC = () => {
 
       {ctxMenu && selectedIds.size > 0 && (
         <div
-          className="fixed z-[9999] rounded-xl border border-border bg-black/90 backdrop-blur p-2 w-56"
+          className="fixed z-[9999] rounded-xl border border-border bg-black/95 backdrop-blur p-2 w-56 shadow-2xl"
           data-selection-ctx-menu
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {/* DOWNLOAD ZIP */}
           <button
             className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-            onMouseDown={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onClick={async () => {
               try {
-                await downloadSelectedAsZip();
+                const ids = Array.from(selectedIds);
+                if (!ids.length) return;
+
+                await downloadZipFromEdge({
+                  ids,
+                  filename: `vhub-${type ?? 'assets'}-${Date.now()}`,
+                });
+
                 showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
               } catch (e: any) {
                 showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP' });
@@ -1027,44 +1040,37 @@ export const DashboardPage: React.FC = () => {
             Baixar selecionados (ZIP)
           </button>
 
-          {activeFolderId && (
-            <button
-              className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-              onMouseDown={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                try {
-                  const ids = Array.from(selectedIds);
-                  for (const id of ids) {
-                    // eslint-disable-next-line no-await-in-loop
-                    await moveAssetToFolder(id, null);
-                  }
-                  setSelectedIds(new Set());
-                  setAnchorIndex(null);
-                  refresh();
-                  showToast({ type: 'success', text: 'Movido para a raiz' });
-                } catch (e: any) {
-                  showToast({ type: 'error', text: e?.message ?? 'Falha ao mover' });
-                } finally {
-                  closeCtxMenu();
-                }
-              }}
-            >
-              Mover p/ Raiz
-            </button>
-          )}
-
+          {/* DELETE SELECIONADOS */}
           <button
-            className="w-full text-left px-3 py-2 rounded-lg text-gray-200 hover:bg-white/5"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setSelectedIds(new Set());
-              setAnchorIndex(null);
-              closeCtxMenu();
+            className="w-full text-left px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10"
+            onClick={async () => {
+              const ids = Array.from(selectedIds);
+              if (!ids.length) return;
+
+              const confirmed = window.confirm(
+                `Tem certeza que deseja deletar ${ids.length} item(ns)?`
+              );
+              if (!confirmed) return;
+
+              try {
+                for (const id of ids) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await deleteAsset(id);
+                }
+
+                setSelectedIds(new Set());
+                setAnchorIndex(null);
+                refresh();
+
+                showToast({ type: 'success', text: 'Itens deletados com sucesso' });
+              } catch (e: any) {
+                showToast({ type: 'error', text: e?.message ?? 'Erro ao deletar' });
+              } finally {
+                closeCtxMenu();
+              }
             }}
           >
-            Limpar seleção
+            Deletar selecionados
           </button>
         </div>
       )}

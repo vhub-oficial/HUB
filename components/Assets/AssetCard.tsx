@@ -176,6 +176,7 @@ export const AssetCard: React.FC<Props> = ({
 
   return (
     <button
+      data-asset-card
       draggable
       onDragStart={(e) => {
         const ids =
