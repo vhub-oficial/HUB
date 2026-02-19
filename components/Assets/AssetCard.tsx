@@ -25,6 +25,21 @@ const isExternal = (asset: AssetRow) => {
   return typeof asset.url === 'string' && /^https?:\/\//i.test(asset.url);
 };
 
+const isAudio = (asset: AssetRow) => {
+  const mt = (asset.meta as any)?.mime_type as string | undefined;
+  if (mt && mt.toLowerCase().startsWith('audio/')) return true;
+
+  const n = (asset.name || asset.url || '').toLowerCase();
+  return (
+    n.endsWith('.mp3') ||
+    n.endsWith('.wav') ||
+    n.endsWith('.m4a') ||
+    n.endsWith('.aac') ||
+    n.endsWith('.ogg') ||
+    n.endsWith('.flac')
+  );
+};
+
 const sanitizeFilename = (name: string) =>
   (name || 'download')
     .trim()
@@ -353,8 +368,22 @@ export const AssetCard: React.FC<Props> = ({
             </div>
             <span className="text-xs text-gray-600">Abra para acessar</span>
           </div>
+        ) : isAudio(asset) ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2 opacity-80">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M4 10v4M7 8v8M10 5v14M13 8v8M16 10v4M19 7v10"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="text-xs text-gray-400">Áudio</div>
+            </div>
+          </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500">Sem preview</div>
+          <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">Sem preview</div>
         )}
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
