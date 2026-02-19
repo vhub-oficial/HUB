@@ -5,6 +5,7 @@ import { getOrgBucketName } from '../lib/storageHelpers';
 
 let disableActivityLogs = false;
 
+// ✅ Thumbs públicas (CDN) — bucket global
 const THUMBS_BUCKET = 'vhub-thumbs';
 
 async function imageFileToThumbWebp(file: File, maxW = 640): Promise<Blob> {
