@@ -26,6 +26,16 @@ export const DashboardPage: React.FC = () => {
   const q = searchParams.get('q') ?? '';
   const isSearching = !type && !!q.trim();
   const { organizationId } = useAuth();
+
+  const isEventInsideSelectionCtxMenu = (ev: MouseEvent) => {
+    const path = (ev.composedPath?.() ?? []) as any[];
+    return path.some(
+      (n) =>
+        n &&
+        (n as HTMLElement).dataset &&
+        (n as HTMLElement).dataset.selectionCtxMenu !== undefined
+    );
+  };
   
   // Read filters from URL (persistência)
   const tags0 = searchParams.get('tags') ?? '';
@@ -76,6 +86,7 @@ export const DashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
+      if (isEventInsideSelectionCtxMenu(ev)) return;
       if (!(ev.target instanceof HTMLElement)) return;
 
       // Se clicou dentro de um card, não limpa
@@ -96,7 +107,7 @@ export const DashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
-      if (ev.target instanceof HTMLElement && ev.target.closest('[data-selection-ctx-menu]')) return;
+      if (isEventInsideSelectionCtxMenu(ev)) return;
       setCtxMenu(null);
     };
     const onEsc = (e: KeyboardEvent) => {
@@ -112,6 +123,7 @@ export const DashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
+      if (isEventInsideSelectionCtxMenu(ev)) return;
       if (!(ev.target instanceof HTMLElement)) return;
       if (ev.target.closest('[data-grid-menu]')) return;
       setGridMenuOpen(false);
@@ -931,10 +943,13 @@ export const DashboardPage: React.FC = () => {
                  <div
                    className="mt-6"
                    onMouseDown={(e) => {
-                     const target = e.target as HTMLElement;
+                     const path = ((e as any).nativeEvent?.composedPath?.() ?? []) as any[];
+                     const insideMenu = path.some(
+                       (n) => n && (n as HTMLElement).dataset && (n as HTMLElement).dataset.selectionCtxMenu !== undefined
+                     );
+                     if (insideMenu) return;
 
-                     // Se clicou no menu de contexto, ignora
-                     if (target.closest('[data-selection-ctx-menu]')) return;
+                     const target = e.target as HTMLElement;
 
                      // Se clicou dentro de um card, ignora
                      if (target.closest('[data-asset-card]')) return;
@@ -1019,7 +1034,10 @@ export const DashboardPage: React.FC = () => {
           {/* DOWNLOAD ZIP */}
           <button
             className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-            onClick={async () => {
+            onMouseDown={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
               try {
                 const ids = Array.from(selectedIds);
                 if (!ids.length) return;
@@ -1043,7 +1061,10 @@ export const DashboardPage: React.FC = () => {
           {/* DELETE SELECIONADOS */}
           <button
             className="w-full text-left px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10"
-            onClick={async () => {
+            onMouseDown={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
               const ids = Array.from(selectedIds);
               if (!ids.length) return;
 
