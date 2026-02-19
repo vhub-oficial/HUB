@@ -194,7 +194,15 @@ export const DashboardPage: React.FC = () => {
   }), [type, effectiveFolderId, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
 
   // Fetch assets based on tag (or all if no tag)
-  const { assets: scopedAssets, loading: assetsLoading, refresh, moveAssetToFolder } = useAssets(assetsArgs);
+  const {
+    assets: scopedAssets,
+    loading: assetsLoading,
+    loadingMore,
+    hasMore,
+    loadMore,
+    refresh,
+    moveAssetToFolder,
+  } = useAssets(assetsArgs);
   const {
     folders,
     createFolder,
@@ -982,6 +990,18 @@ export const DashboardPage: React.FC = () => {
                       onItemContextMenu={openSelectionContextMenu}
                       density={gridDensity}
                     />
+                    {hasMore && (
+                      <div className="mt-6 flex justify-center">
+                        <button
+                          className="px-4 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 disabled:opacity-50"
+                          disabled={assetsLoading || loadingMore}
+                          onClick={() => loadMore()}
+                          title="Carregar mais"
+                        >
+                          {loadingMore ? 'Carregando…' : 'Carregar mais'}
+                        </button>
+                      </div>
+                    )}
                     {scopedAssets.length === 0 && (
                       <div className="text-gray-500 text-sm mt-3">
                         {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
