@@ -20,6 +20,78 @@ import { Loader2 } from 'lucide-react';
 import { NewAssetModal } from './components/Assets/NewAssetModal';
 import { UploadQueueProvider } from './contexts/UploadQueueContext';
 import { UploadTray } from './components/Uploads/UploadTray';
+import { supabase } from './lib/supabase';
+
+const storageKeyForJoinCode = (email: string) => `vhub:join_code:${email.toLowerCase().trim()}`;
+
+const ProvisioningGate: React.FC<{ email?: string | null }> = ({ email }) => {
+  const [status, setStatus] = React.useState<'loading' | 'failed'>('loading');
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const cleanEmail = (email ?? '').trim();
+        if (!cleanEmail) throw new Error('missing-email');
+
+        const key = storageKeyForJoinCode(cleanEmail);
+        const code = localStorage.getItem(key)?.trim();
+        if (!code) throw new Error('missing-code');
+
+        // tenta vincular automaticamente (RPC já existente no /pending)
+        const { error } = await supabase.rpc('join_org_by_code', { p_code: code });
+        if (error) throw error;
+
+        // se deu certo, limpamos o code e recarregamos para o AuthContext pegar o profile
+        localStorage.removeItem(key);
+        window.location.assign('/#/dashboard');
+      } catch {
+        if (mounted) setStatus('failed');
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [email]);
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-black/60 border border-border rounded-2xl p-6 text-gray-200">
+          <div className="text-white text-xl font-semibold">Conectando à organização…</div>
+          <div className="mt-3 text-gray-300 text-sm">
+            Estamos vinculando seu acesso automaticamente. Se demorar, aguarde alguns segundos.
+          </div>
+          <div className="mt-5 flex items-center gap-3">
+            <Loader2 className="animate-spin text-gold" size={18} />
+            <div className="text-sm text-gray-300">Processando…</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-black/60 border border-border rounded-2xl p-6 text-gray-200">
+        <div className="text-white text-xl font-semibold">Acesso ainda não vinculado</div>
+        <div className="mt-3 text-gray-300 text-sm">
+          Não conseguimos vincular automaticamente. Você pode inserir o código manualmente.
+        </div>
+        <div className="mt-5 flex justify-end">
+          <a
+            className="px-4 py-2 rounded-xl border border-border bg-gold text-black font-semibold hover:opacity-90"
+            href="/#/pending"
+          >
+            Inserir código
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Protected Route Wrapper
 const ProtectedLayout = () => {
@@ -42,7 +114,8 @@ const ProtectedLayout = () => {
   if (!profile) {
     // If the auth user exists but there's no public.users row yet, show pending screen.
     if (user && needsProvisioning) {
-      return <PendingAccessPage />;
+      // NÃO mostrar /pending automaticamente. Tenta auto-join e só oferece manual se falhar.
+      return <ProvisioningGate email={user.email} />;
     }
     return <Navigate to="/login" replace />;
   }
