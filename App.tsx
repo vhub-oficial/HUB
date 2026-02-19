@@ -10,6 +10,7 @@ import { FolderPage } from './app/folders/[id]/page';
 import { AssetDetailPage } from './app/assets/[id]/page';
 import { ProfilePage } from './app/profile/page';
 import { LoginPage } from './app/auth/login/page';
+import { ResetPasswordPage } from './app/auth/reset/page';
 import { PendingAccessPage } from './app/pending/page';
 import { InviteAcceptPage } from './app/auth/invite/[token]/page';
 import { BlockedPage } from './app/blocked/page';
@@ -73,6 +74,7 @@ const App: React.FC = () => {
           <UploadQueueProvider>
             <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset" element={<ResetPasswordPage />} />
             <Route path="/pending" element={<PendingAccessPage />} />
             <Route path="/invite/:token" element={<InviteAcceptPage />} />
             <Route path="/blocked" element={<BlockedPage />} />
