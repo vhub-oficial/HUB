@@ -157,8 +157,10 @@ export const DashboardPage: React.FC = () => {
     folderFromUrl ? String(folderFromUrl) : undefined,
   );
   const [folderSearch, setFolderSearch] = useState('');
-  const effectiveFolderId: string | null =
-    typeof activeFolderId === 'string' ? activeFolderId : null;
+  const effectiveFolderId = useMemo(() => {
+    if (activeFolderId) return activeFolderId;
+    return null;
+  }, [activeFolderId]);
   const { options } = useFilterOptions(type, effectiveFolderId);
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
@@ -186,15 +188,23 @@ export const DashboardPage: React.FC = () => {
   const selectionMode = selectedIds.size > 0;
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
+  const limit = 120;
 
   const assetsArgs = useMemo(() => ({
     type,
-    folderId: effectiveFolderId,
+    folderId: effectiveFolderId ?? null,
     tagsAny,
     metaFilters: filters.meta,
     query: q ? q : null,
-    limit: 120,
-  }), [type, effectiveFolderId, q, JSON.stringify(tagsAny ?? []), JSON.stringify(filters.meta ?? {})]);
+    limit,
+  }), [
+    type,
+    effectiveFolderId,
+    q,
+    JSON.stringify(tagsAny ?? []),
+    JSON.stringify(filters.meta ?? {}),
+    limit,
+  ]);
 
   // Fetch assets based on tag (or all if no tag)
   const {
