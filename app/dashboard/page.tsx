@@ -128,6 +128,9 @@ export const DashboardPage: React.FC = () => {
     const sp = new URLSearchParams(location.search);
     sp.set('type', type);
 
+    if (folderFromUrl) sp.set('folder', String(folderFromUrl));
+    else sp.delete('folder');
+
     if (filters.tags.trim()) sp.set('tags', filters.tags.trim());
     else sp.delete('tags');
 
@@ -146,7 +149,7 @@ export const DashboardPage: React.FC = () => {
       }, 250);
       return () => clearTimeout(t);
     }
-  }, [filters, type, location.pathname, location.search, navigate]);
+  }, [filters, type, location.pathname, location.search, navigate, folderFromUrl]);
 
   const tagsAny = useMemo(() => {
     if (!filters.tags.trim()) return null;
