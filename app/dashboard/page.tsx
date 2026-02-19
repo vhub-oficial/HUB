@@ -19,6 +19,10 @@ export const DashboardPage: React.FC = () => {
   const typeRaw = searchParams.get('type');
   const folderFromUrl = searchParams.get('folder');
   const type = typeRaw ? typeRaw.toLowerCase() : null;
+  const lastFolderKey = React.useMemo(() => {
+    return type ? `vhub:lastFolder:${type}` : null;
+  }, [type]);
+  const didUserClearFolderRef = React.useRef(false);
   const q = searchParams.get('q') ?? '';
   const isSearching = !type && !!q.trim();
   const { organizationId } = useAuth();
@@ -280,6 +284,42 @@ export const DashboardPage: React.FC = () => {
       mounted = false;
     };
   }, [activeFolderId, getBreadcrumb]);
+
+  useEffect(() => {
+    if (!lastFolderKey) return;
+
+    if (activeFolderId) {
+      sessionStorage.setItem(lastFolderKey, String(activeFolderId));
+      didUserClearFolderRef.current = false;
+    }
+  }, [activeFolderId, lastFolderKey]);
+
+  useEffect(() => {
+    if (!type) return;
+    if (!lastFolderKey) return;
+
+    const restoreIfNeeded = () => {
+      const sp = new URLSearchParams(location.search);
+      const hasFolder = !!sp.get('folder');
+      if (hasFolder) return;
+
+      if (didUserClearFolderRef.current) return;
+
+      const saved = sessionStorage.getItem(lastFolderKey);
+      if (!saved) return;
+
+      setFolderInUrl(saved);
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === 'visible') restoreIfNeeded();
+    };
+
+    document.addEventListener('visibilitychange', onVis);
+    restoreIfNeeded();
+
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [type, lastFolderKey, location.search, setFolderInUrl]);
 
   const scopedIdToIndex = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -757,6 +797,9 @@ export const DashboardPage: React.FC = () => {
                            <button
                              className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
                              onClick={() => {
+                              didUserClearFolderRef.current = true;
+                              if (lastFolderKey) sessionStorage.removeItem(lastFolderKey);
+
                               setFolderInUrl(undefined);
                               setFilters({ tags: '', meta: {} });
                             }}
