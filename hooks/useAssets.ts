@@ -8,7 +8,20 @@ let disableActivityLogs = false;
 // ✅ Thumbs públicas (CDN) — bucket global
 const THUMBS_BUCKET = 'vhub-thumbs';
 
-async function imageFileToThumbWebp(file: File, maxW = 640): Promise<Blob> {
+async function canvasToThumbBlob(canvas: HTMLCanvasElement): Promise<{ blob: Blob; mime: string; ext: string }> {
+  const tryBlob = (mime: string, quality: number) =>
+    new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), mime, quality));
+
+  const webp = await tryBlob('image/webp', 0.82);
+  if (webp) return { blob: webp, mime: 'image/webp', ext: 'webp' };
+
+  const jpg = await tryBlob('image/jpeg', 0.86);
+  if (jpg) return { blob: jpg, mime: 'image/jpeg', ext: 'jpg' };
+
+  throw new Error('thumb_blob_failed');
+}
+
+async function imageFileToThumb(file: File, maxW = 640) {
   const img = new Image();
   const url = URL.createObjectURL(file);
 
@@ -31,20 +44,17 @@ async function imageFileToThumbWebp(file: File, maxW = 640): Promise<Blob> {
 
     ctx.drawImage(img, 0, 0, w, h);
 
-    const blob = await new Promise<Blob>((res, rej) => {
-      canvas.toBlob((b) => (b ? res(b) : rej(new Error('thumb_blob_failed'))), 'image/webp', 0.82);
-    });
-
-    return blob;
+    return await canvasToThumbBlob(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 640): Promise<Blob> {
+async function videoFileToThumb(file: File, seekSeconds = 0.5, maxW = 640) {
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
+  video.preload = 'auto';
 
   const url = URL.createObjectURL(file);
   try {
@@ -52,21 +62,30 @@ async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 640): 
       video.onloadedmetadata = () => res();
       video.onerror = () => rej(new Error('video_meta_failed'));
       video.src = url;
+      video.load();
     });
 
-    const t = Math.min(Math.max(seekSeconds, 0), Math.max(0, (video.duration || 0) - 0.1));
-    video.currentTime = t;
+    const duration = Number(video.duration || 0);
+    const t = duration > 0 ? Math.min(Math.max(seekSeconds, 0), Math.max(0, duration - 0.1)) : 0;
 
     await new Promise<void>((res, rej) => {
-      const onSeeked = () => res();
-      const onErr = () => rej(new Error('video_seek_failed'));
-      video.onseeked = onSeeked;
-      video.onerror = onErr;
+      video.onseeked = () => res();
+      video.onerror = () => rej(new Error('video_seek_failed'));
+      video.currentTime = t;
     });
 
-    const scale = Math.min(1, maxW / video.videoWidth);
-    const w = Math.max(1, Math.round(video.videoWidth * scale));
-    const h = Math.max(1, Math.round(video.videoHeight * scale));
+    await new Promise<void>((res, rej) => {
+      if (video.readyState >= 2) return res();
+      video.onloadeddata = () => res();
+      video.onerror = () => rej(new Error('video_loadeddata_failed'));
+    });
+
+    const vw = video.videoWidth || 1;
+    const vh = video.videoHeight || 1;
+
+    const scale = Math.min(1, maxW / vw);
+    const w = Math.max(1, Math.round(vw * scale));
+    const h = Math.max(1, Math.round(vh * scale));
 
     const canvas = document.createElement('canvas');
     canvas.width = w;
@@ -76,11 +95,7 @@ async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 640): 
 
     ctx.drawImage(video, 0, 0, w, h);
 
-    const blob = await new Promise<Blob>((res, rej) => {
-      canvas.toBlob((b) => (b ? res(b) : rej(new Error('thumb_blob_failed'))), 'image/webp', 0.82);
-    });
-
-    return blob;
+    return await canvasToThumbBlob(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -334,40 +349,33 @@ export function useAssets(args?: AssetsArgs) {
       });
       if (upErr) throw upErr;
 
-      let thumbnailPath: string | null = null;
-      let thumbnailUrl: string | null = null;
+      let thumb: { path: string; mime: string } | null = null;
 
       try {
         const isImg = file.type?.startsWith('image/');
         const isVid = file.type?.startsWith('video/');
 
         if (isImg || isVid) {
-          const thumbBlob = isImg
-            ? await imageFileToThumbWebp(file, 640)
-            : await videoFileToThumbWebp(file, 0.5, 640);
+          const out = isImg ? await imageFileToThumb(file, 640) : await videoFileToThumb(file, 0.5, 640);
+          const thumbName = `${genUUID()}-thumb.${out.ext}`;
+          const thumbPath = `${organizationId}/${folderPath}/thumbs/${thumbName}`;
 
-          const thumbFile = new File([thumbBlob], 'thumb.webp', { type: 'image/webp' });
-          const thumbName = `${genUUID()}-thumb.webp`;
-
-          thumbnailPath = `${organizationId}/${folderPath}/thumbs/${thumbName}`;
-
-          const upThumb = await supabase.storage.from(THUMBS_BUCKET).upload(thumbnailPath, thumbFile, {
+          const upThumb = await supabase.storage.from(THUMBS_BUCKET).upload(
+            thumbPath,
+            new File([out.blob], `thumb.${out.ext}`, { type: out.mime }),
+            {
             upsert: false,
-            contentType: 'image/webp',
+            contentType: out.mime,
             cacheControl: '31536000',
-          });
+            }
+          );
 
-          if (upThumb.error) {
-            thumbnailPath = null;
-            thumbnailUrl = null;
-          } else {
-            const pub = supabase.storage.from(THUMBS_BUCKET).getPublicUrl(thumbnailPath);
-            thumbnailUrl = pub?.data?.publicUrl || null;
+          if (!upThumb.error) {
+            thumb = { path: thumbPath, mime: out.mime };
           }
         }
       } catch {
-        thumbnailPath = null;
-        thumbnailUrl = null;
+        thumb = null;
       }
 
       const sizeMb = file.size / (1024 * 1024);
@@ -391,14 +399,7 @@ export function useAssets(args?: AssetsArgs) {
             source: 'storage',
             original_name: file.name,
             mime_type: file.type || null,
-            ...(thumbnailPath && thumbnailUrl
-              ? {
-                  thumbnail_bucket: THUMBS_BUCKET,
-                  thumbnail_path: thumbnailPath,
-                  thumbnail_url: thumbnailUrl,
-                  thumbnail_mime: 'image/webp',
-                }
-              : {}),
+            ...(thumb ? { thumbnail_path: thumb.path, thumbnail_mime: thumb.mime, thumbnail_bucket: THUMBS_BUCKET } : {}),
             ...((opts.meta ?? {}) as any),
           },
         })

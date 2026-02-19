@@ -100,30 +100,40 @@ export const AssetCard: React.FC<Props> = ({
 
   React.useEffect(() => {
     let mounted = true;
-    try {
-      if (isExternal(asset)) {
-        const thumb = asset.meta?.thumbnail_url || '';
-        if (mounted) setSrc(thumb);
-        return;
-      }
+    (async () => {
+      try {
+        if (isExternal(asset)) {
+          const thumb = asset.meta?.thumbnail_url || '';
+          if (mounted) setSrc(thumb);
+          return;
+        }
 
-      const thumbPath = (asset.meta as any)?.thumbnail_path as string | undefined;
-      if (thumbPath) {
-        // ✅ Thumb pública: URL direta (sem signed)
-        const { data } = supabase.storage.from('vhub-thumbs').getPublicUrl(thumbPath);
-        if (mounted) setSrc(data.publicUrl);
-        return;
-      }
+        const thumbPath = (asset.meta as any)?.thumbnail_path as string | undefined;
+        const thumbBucket = (asset.meta as any)?.thumbnail_bucket as string | undefined;
 
-      const internalThumb = (asset.meta as any)?.thumbnail_url as string | undefined;
-      if (mounted) setSrc(internalThumb || '');
-    } catch {
-      if (mounted) setSrc('');
-    }
+        if (!thumbPath) {
+          if (mounted) setSrc('');
+          return;
+        }
+
+        if (thumbBucket === 'vhub-thumbs') {
+          const { data } = supabase.storage.from('vhub-thumbs').getPublicUrl(thumbPath);
+          if (mounted) setSrc(data.publicUrl || '');
+          return;
+        }
+
+        const bucket = getOrgBucketName(organizationId);
+        const signed = await createSignedUrl(bucket, thumbPath, 3600);
+        if (mounted) setSrc(signed);
+      } catch {
+        if (mounted) setSrc('');
+      }
+    })();
+
     return () => {
       mounted = false;
     };
-  }, [asset.id, asset.url, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_url]);
+  }, [asset.id, asset.url, organizationId, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_bucket]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
