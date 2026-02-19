@@ -12,6 +12,7 @@ export const LoginPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = React.useState(false);
   const [isForgot, setIsForgot] = React.useState(false);
   const [showVerifyEmail, setShowVerifyEmail] = React.useState(false);
+  const [provisioning, setProvisioning] = React.useState(false);
 
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -31,9 +32,8 @@ export const LoginPage: React.FC = () => {
     if (!clean) throw new Error('Informe o código da organização.');
     const { data, error } = await supabase.rpc('validate_org_join_code', { p_code: clean });
     if (error) throw new Error('Falha ao validar o código. Tente novamente.');
-    const row = Array.isArray(data) ? data[0] : (data as any);
-    if (!row?.organization_id) throw new Error('Código da organização inválido.');
-    return row as { organization_id: string; organization_name: string };
+    if (!data) throw new Error('Código da organização inválido.');
+    return true;
   }, []);
 
   const tryAutoJoinAfterLogin = React.useCallback(async (e: string) => {
@@ -63,12 +63,14 @@ export const LoginPage: React.FC = () => {
         return;
       }
       if (user && needsProvisioning) {
+        setProvisioning(true);
         const ok = await tryAutoJoinAfterLogin(user.email ?? '');
         if (ok) {
           window.location.assign('/#/dashboard');
           return;
         }
-        navigate('/pending');
+        setProvisioning(false);
+        setErr('Seu acesso ainda não está vinculado a uma organização. Informe o código manualmente.');
       }
     })();
   }, [user, profile, needsProvisioning, navigate, tryAutoJoinAfterLogin]);
@@ -108,7 +110,7 @@ export const LoginPage: React.FC = () => {
 
       if (isRegistering) {
         if (!name.trim()) throw new Error('O nome é obrigatório para o cadastro.');
-        const org = await validateJoinCode(orgCode);
+        await validateJoinCode(orgCode);
         const { error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -120,7 +122,7 @@ export const LoginPage: React.FC = () => {
         setIsRegistering(false);
         setIsForgot(false);
         setPassword('');
-        setInfo(`Conta criada! Agora confirme seu e-mail para acessar a organização "${org.organization_name}".`);
+        setInfo('Conta criada! Agora confirme seu e-mail para liberar seu acesso.');
         return;
       }
 
@@ -160,6 +162,31 @@ export const LoginPage: React.FC = () => {
               }}
             >
               Ir para login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (provisioning) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-black/60 border border-border rounded-2xl p-6">
+          <div className="text-white text-xl font-semibold">Conectando à organização…</div>
+          <div className="mt-3 text-gray-300 text-sm">
+            Estamos vinculando seu acesso automaticamente. Se demorar, aguarde alguns segundos.
+          </div>
+          <div className="mt-5 flex justify-end">
+            <button
+              className="px-4 py-2 rounded-xl border border-border bg-black/40 text-gray-200 hover:bg-black/30"
+              onClick={async () => {
+                setProvisioning(false);
+                await supabase.auth.signOut();
+                navigate('/login');
+              }}
+            >
+              Cancelar
             </button>
           </div>
         </div>
@@ -281,6 +308,17 @@ export const LoginPage: React.FC = () => {
             Esqueci minha senha
           </button>
         </div>
+
+        {err?.includes('vinculado') && (
+          <div className="mt-3">
+            <button
+              className="text-sm text-amber-300 hover:text-amber-200 underline"
+              onClick={() => navigate('/pending')}
+            >
+              Inserir código manualmente
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
