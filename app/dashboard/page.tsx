@@ -9,7 +9,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
-import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
 
 export const DashboardPage: React.FC = () => {
@@ -481,150 +480,40 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const sanitizeZipName = (name: string) =>
-    (name || 'download')
-      .toString()
-      .trim()
-      .replace(/[\\/:*?"<>|]+/g, '-')
-      .replace(/\s+/g, ' ')
-      .slice(0, 120);
+  const downloadZipFromEdge = async (payload: { ids?: string[]; folderId?: string | null; filename?: string }) => {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vhub-zip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const extFromMime = (mime?: string | null) => {
-    if (!mime) return '';
-    const m = mime.toLowerCase();
-    if (m.includes('video/mp4')) return '.mp4';
-    if (m.includes('video/quicktime')) return '.mov';
-    if (m.includes('video/webm')) return '.webm';
-    if (m.includes('audio/mpeg')) return '.mp3';
-    if (m.includes('audio/wav')) return '.wav';
-    if (m.includes('audio/mp4')) return '.m4a';
-    if (m.includes('image/png')) return '.png';
-    if (m.includes('image/jpeg')) return '.jpg';
-    if (m.includes('image/webp')) return '.webp';
-    return '';
-  };
-
-  const buildZipFilename = (asset: any) => {
-    const base = sanitizeZipName(asset?.name || asset?.meta?.original_name || 'download');
-
-    const original = (asset?.meta?.original_name as string | undefined) || '';
-    const originalExt = original.includes('.') ? `.${original.split('.').pop()}` : '';
-    const mimeExt = extFromMime(asset?.meta?.mime_type);
-
-    const ext = originalExt || mimeExt || '';
-    return `${base}${ext}`;
-  };
-
-  const uniqueName = (name: string, seen: Map<string, number>) => {
-    const cur = seen.get(name) ?? 0;
-    if (cur === 0) {
-      seen.set(name, 1);
-      return name;
+    if (!res.ok) {
+      let msg = 'Falha no ZIP';
+      try {
+        const j = await res.json();
+        msg = j?.error ?? msg;
+      } catch {}
+      throw new Error(msg);
     }
-    const dot = name.lastIndexOf('.');
-    const hasExt = dot > 0 && dot < name.length - 1;
-    const stem = hasExt ? name.slice(0, dot) : name;
-    const ext = hasExt ? name.slice(dot) : '';
-    const next = `${stem} (${cur + 1})${ext}`;
-    seen.set(name, cur + 1);
-    return next;
+
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${(payload.filename ?? 'vhub')}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
 
   const downloadSelectedAsZip = async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) throw new Error('Nada selecionado.');
-
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
-    const seen = new Map<string, number>();
-
-    for (const id of ids) {
-      const asset = scopedAssets.find((a) => a.id === id);
-      if (!asset) continue;
-
-      let urlToFetch = asset.url;
-
-      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
-      if (!isExternal) {
-        const bucket = getOrgBucketName(organizationId!);
-        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
-      } else {
-        urlToFetch = asset.meta?.download_url || asset.url;
-      }
-
-      const res = await fetch(urlToFetch);
-      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
-      const blob = await res.blob();
-
-      const baseName = buildZipFilename(asset);
-      const finalName = uniqueName(baseName, seen);
-
-      zip.file(finalName, blob);
-    }
-
-    const out = await zip.generateAsync({ type: 'blob' });
-    const blobUrl = URL.createObjectURL(out);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `vhub-${type ?? 'assets'}-${Date.now()}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
-  };
-
-  const downloadFolderAsZipById = async (folderId: string, folderName: string) => {
-    if (!organizationId) throw new Error('Sem organização.');
-    if (!type) throw new Error('Selecione uma categoria.');
-
-    const { data, error } = await supabase
-      .from('assets')
-      .select('id,name,url,meta')
-      .eq('organization_id', organizationId)
-      .eq('type', type)
-      .eq('folder_id', folderId)
-      .limit(2000);
-
-    if (error) throw error;
-    const assets = (data ?? []) as any[];
-    if (!assets.length) throw new Error('Pasta vazia.');
-
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
-    const seen = new Map<string, number>();
-
-    const folderSafe = sanitizeZipName(folderName || 'pasta');
-    const sub = zip.folder(folderSafe) ?? zip;
-
-    for (const asset of assets) {
-      let urlToFetch = asset.url;
-
-      const isExternal = asset.meta?.source === 'external' || /^https?:\/\//i.test(asset.url);
-      if (!isExternal) {
-        const bucket = getOrgBucketName(organizationId);
-        urlToFetch = await createSignedUrl(bucket, asset.url, 3600);
-      } else {
-        urlToFetch = asset.meta?.download_url || asset.url;
-      }
-
-      const res = await fetch(urlToFetch);
-      if (!res.ok) throw new Error(`Falha ao baixar: ${asset.name}`);
-      const blob = await res.blob();
-
-      const baseName = buildZipFilename(asset);
-      const finalName = uniqueName(baseName, seen);
-      sub.file(finalName, blob);
-    }
-
-    const out = await zip.generateAsync({ type: 'blob' });
-    const blobUrl = URL.createObjectURL(out);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `vhub-${type}-${folderSafe}-${Date.now()}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
+    await downloadZipFromEdge({ ids, filename: `vhub-${type ?? 'assets'}-${Date.now()}` });
   };
 
 
@@ -1007,7 +896,10 @@ export const DashboardPage: React.FC = () => {
                                      onClick={async () => {
                                        setFolderMenuOpenId(null);
                                        try {
-                                         await downloadFolderAsZipById(f.id, f.name);
+                                         await downloadZipFromEdge({
+                                           folderId: f.id,
+                                           filename: `vhub-${type ?? 'assets'}-pasta-${Date.now()}`,
+                                         });
                                          showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
                                        } catch (e: any) {
                                          showToast({ type: 'error', text: e?.message ?? 'Falha no download' });
