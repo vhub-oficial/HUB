@@ -69,6 +69,7 @@ export const AssetCard: React.FC<Props> = ({
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
   const [src, setSrc] = React.useState<string>('');
+  const external = React.useMemo(() => isExternal(asset), [asset.id]);
 
   const handleDownload = React.useCallback(async () => {
     try {
@@ -102,7 +103,7 @@ export const AssetCard: React.FC<Props> = ({
     let mounted = true;
     (async () => {
       try {
-        if (isExternal(asset)) {
+        if (external) {
           const thumb = asset.meta?.thumbnail_url || '';
           if (mounted) setSrc(thumb);
           return;
@@ -122,6 +123,11 @@ export const AssetCard: React.FC<Props> = ({
           return;
         }
 
+        if (!organizationId) {
+          if (mounted) setSrc('');
+          return;
+        }
+
         const bucket = getOrgBucketName(organizationId);
         const signed = await createSignedUrl(bucket, thumbPath, 3600);
         if (mounted) setSrc(signed);
@@ -133,7 +139,7 @@ export const AssetCard: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, [asset.id, asset.url, organizationId, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_bucket]);
+  }, [asset.id, external, organizationId, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_bucket]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
