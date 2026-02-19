@@ -99,33 +99,22 @@ export const AssetCard: React.FC<Props> = ({
 
   React.useEffect(() => {
     let mounted = true;
-    (async () => {
-      try {
-        if (!organizationId) return;
-
-        if (isExternal(asset)) {
-          const thumb = asset.meta?.thumbnail_url || '';
-          if (mounted) setSrc(thumb);
-          return;
-        }
-
-        const thumbPath = (asset.meta as any)?.thumbnail_path as string | undefined;
-        if (!thumbPath) {
-          if (mounted) setSrc('');
-          return;
-        }
-
-        const bucket = getOrgBucketName(organizationId);
-        const signed = await createSignedUrl(bucket, thumbPath, 3600);
-        if (mounted) setSrc(signed);
-      } catch {
-        if (mounted) setSrc('');
+    try {
+      if (isExternal(asset)) {
+        const thumb = asset.meta?.thumbnail_url || '';
+        if (mounted) setSrc(thumb);
+        return;
       }
-    })();
+
+      const internalThumb = (asset.meta as any)?.thumbnail_url as string | undefined;
+      if (mounted) setSrc(internalThumb || '');
+    } catch {
+      if (mounted) setSrc('');
+    }
     return () => {
       mounted = false;
     };
-  }, [organizationId, asset.url, (asset.meta as any)?.thumbnail_path]);
+  }, [asset.id, asset.url, (asset.meta as any)?.thumbnail_url]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
