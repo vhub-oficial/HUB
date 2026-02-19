@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Role } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -21,6 +21,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Força uma revalidação do perfil (útil para Pending) */
+  refreshProfile: () => Promise<UserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [needsProvisioning, setNeedsProvisioning] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const provisionRetryRef = useRef<{ timer: any; attempts: number } | null>(null);
 
   useEffect(() => {
     // 1. Get initial session
@@ -66,6 +69,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
+  // Enquanto não existe linha em public.users, re-tenta automaticamente por alguns segundos.
+  useEffect(() => {
+    // limpa timer anterior
+    if (provisionRetryRef.current?.timer) {
+      clearInterval(provisionRetryRef.current.timer);
+      provisionRetryRef.current = null;
+    }
+
+    if (!session?.user?.id) return;
+    if (!needsProvisioning) return;
+
+    provisionRetryRef.current = { timer: null, attempts: 0 };
+    provisionRetryRef.current.timer = setInterval(async () => {
+      if (!session?.user?.id) return;
+      if (!provisionRetryRef.current) return;
+
+      provisionRetryRef.current.attempts += 1;
+      // 20 tentativas ~ 20s (suave e suficiente pro provisionamento)
+      if (provisionRetryRef.current.attempts > 20) {
+        clearInterval(provisionRetryRef.current.timer);
+        provisionRetryRef.current = null;
+        return;
+      }
+
+      const p = await fetchProfile(session.user.id);
+      if (p) {
+        // se achou, para o loop
+        if (provisionRetryRef.current?.timer) clearInterval(provisionRetryRef.current.timer);
+        provisionRetryRef.current = null;
+      }
+    }, 1000);
+
+    return () => {
+      if (provisionRetryRef.current?.timer) clearInterval(provisionRetryRef.current.timer);
+      provisionRetryRef.current = null;
+    };
+  }, [needsProvisioning, session?.user?.id]);
+
   const fetchProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       // Fetch from 'users' table (RLS protected)
@@ -88,6 +129,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsBlocked(true);
         setAuthError('Seu acesso foi bloqueado pelo administrador desta organização.');
         return null;
+      }
+
+      // Se o nome não veio em public.users, tenta sincronizar a partir do metadata do auth
+      // (isso resolve o caso do perfil aparecer sem nome após cadastro)
+      const metaName =
+        (session?.user?.user_metadata as any)?.full_name ||
+        (session?.user?.user_metadata as any)?.name ||
+        '';
+      if (profile && !profile.name && metaName) {
+        const { error: upErr } = await supabase
+          .from('users')
+          .update({ name: metaName })
+          .eq('id', userId);
+        if (!upErr) {
+          (profile as any).name = metaName;
+        }
       }
 
       setAuthError(null);
@@ -146,6 +203,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
   };
 
+  const refreshProfile = async () => {
+    const uid = session?.user?.id;
+    if (!uid) return null;
+    setLoading(true);
+    const p = await fetchProfile(uid);
+    return p;
+  };
+
   const hasRole = (required: Role) => {
     const current = profile?.role;
     if (!current) return false;
@@ -168,6 +233,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signIn,
       signUp,
       signOut,
+      refreshProfile,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, profile, loading, isBlocked, needsProvisioning, authError]
