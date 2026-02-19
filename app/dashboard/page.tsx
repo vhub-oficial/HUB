@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
+import { normalizeCategoryType } from '../../lib/categoryType';
 
 export const DashboardPage: React.FC = () => {
   const location = useLocation();
@@ -247,11 +248,13 @@ export const DashboardPage: React.FC = () => {
     );
   }, [location.pathname, location.search, navigate]);
 
+  const normalizedType = useMemo(() => normalizeCategoryType(type ?? null), [type]);
+
   const foldersForCategory = useMemo(() => {
     const base = folders.filter((f) => !f.parent_id);
-    if (!type) return base;
-    return base.filter((f) => f.category_type === type);
-  }, [folders, type]);
+    if (!normalizedType) return base;
+    return base.filter((f) => (f.category_type ?? null) === normalizedType);
+  }, [folders, normalizedType]);
 
   const foldersFiltered = useMemo(() => {
     const qq = folderSearch.trim().toLowerCase();
