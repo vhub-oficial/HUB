@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAssets } from '../../hooks/useAssets';
 import { useFolders, type FolderRow } from '../../hooks/useFolders';
@@ -17,6 +17,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const typeRaw = searchParams.get('type');
+  const folderFromUrl = searchParams.get('folder');
   const type = typeRaw ? typeRaw.toLowerCase() : null;
   const q = searchParams.get('q') ?? '';
   const isSearching = !type && !!q.trim();
@@ -152,7 +153,9 @@ export const DashboardPage: React.FC = () => {
     return [filters.tags.trim()];
   }, [filters.tags]);
 
-  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(undefined);
+  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(
+    folderFromUrl ? String(folderFromUrl) : undefined,
+  );
   const [folderSearch, setFolderSearch] = useState('');
   const effectiveFolderId: string | null =
     typeof activeFolderId === 'string' ? activeFolderId : null;
@@ -213,6 +216,15 @@ export const DashboardPage: React.FC = () => {
   } = useFolders({ parentId: null, type: type ?? null, sort: folderSortForHook });
   const [newFolderOpen, setNewFolderOpen] = useState(false);
 
+  const setFolderInUrl = useCallback((folderId: string | undefined) => {
+    const sp = new URLSearchParams(location.search);
+
+    if (folderId) sp.set('folder', folderId);
+    else sp.delete('folder');
+
+    navigate({ pathname: location.pathname, search: sp.toString() }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
   const foldersForCategory = useMemo(() => {
     const base = folders.filter((f) => !f.parent_id);
     if (!type) return base;
@@ -225,6 +237,23 @@ export const DashboardPage: React.FC = () => {
     if (foldersSort === 'za') next = [...next].reverse();
     return next;
   }, [foldersForCategory, folderSearch, foldersSort]);
+
+  useEffect(() => {
+    const next = folderFromUrl ? String(folderFromUrl) : undefined;
+
+    setActiveFolderId((prev) => {
+      if ((prev ?? undefined) === (next ?? undefined)) return prev;
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderFromUrl]);
+
+  useEffect(() => {
+    if (!type) return;
+    setActiveFolderId(undefined);
+    setFolderInUrl(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
 
   useEffect(() => {
     let mounted = true;
@@ -581,6 +610,7 @@ export const DashboardPage: React.FC = () => {
     if (activeFolderId === folderId) {
       setFolderMenuOpenId(null);
       setActiveFolderId(undefined);
+      setFolderInUrl(undefined);
     }
 
     refresh();
@@ -721,6 +751,7 @@ export const DashboardPage: React.FC = () => {
                              className="text-sm text-gray-300 hover:text-white border border-border bg-black/30 rounded-lg px-3 py-1"
                              onClick={() => {
                               setActiveFolderId(undefined);
+                              setFolderInUrl(undefined);
                               setFilters({ tags: '', meta: {} });
                             }}
                              onDragOver={(e) => e.preventDefault()}
@@ -737,6 +768,7 @@ export const DashboardPage: React.FC = () => {
                                  className="text-sm text-gray-200 hover:text-white border border-border bg-black/20 rounded-lg px-3 py-1 hover:border-gold/30"
                                  onClick={() => {
                                    setActiveFolderId(node.id);
+                                   setFolderInUrl(node.id);
                                    setFilters({ tags: '', meta: {} });
                                  }}
                                  onDragOver={(e) => e.preventDefault()}
@@ -866,6 +898,7 @@ export const DashboardPage: React.FC = () => {
                                className="w-full text-left p-4 flex items-center gap-3"
                                onClick={() => {
                                  setActiveFolderId(f.id);
+                                 setFolderInUrl(f.id);
                                  setFilters({ tags: '', meta: {} });
                                  setFolderMenuOpenId(null);
                                }}
