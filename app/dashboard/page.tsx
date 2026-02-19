@@ -1011,7 +1011,9 @@ export const DashboardPage: React.FC = () => {
         >
           <button
             className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-            onClick={async () => {
+            onMouseDown={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
               try {
                 await downloadSelectedAsZip();
                 showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
@@ -1028,7 +1030,9 @@ export const DashboardPage: React.FC = () => {
           {activeFolderId && (
             <button
               className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
-              onClick={async () => {
+              onMouseDown={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 try {
                   const ids = Array.from(selectedIds);
                   for (const id of ids) {
@@ -1052,7 +1056,9 @@ export const DashboardPage: React.FC = () => {
 
           <button
             className="w-full text-left px-3 py-2 rounded-lg text-gray-200 hover:bg-white/5"
-            onClick={() => {
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setSelectedIds(new Set());
               setAnchorIndex(null);
               closeCtxMenu();
