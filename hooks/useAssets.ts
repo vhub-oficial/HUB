@@ -242,6 +242,7 @@ export function useAssets(args?: AssetsArgs) {
       .upload(objectPath, file, {
         upsert: false,
         contentType: file.type || undefined,
+        cacheControl: '31536000',
       });
     if (upErr) throw upErr;
 
@@ -253,8 +254,8 @@ export function useAssets(args?: AssetsArgs) {
 
       if (isImg || isVid) {
         const thumbBlob = isImg
-          ? await imageFileToThumbWebp(file, 640)
-          : await videoFileToThumbWebp(file, 0.5, 640);
+          ? await imageFileToThumbWebp(file, 480)
+          : await videoFileToThumbWebp(file, 0.5, 480);
 
         const thumbFile = new File([thumbBlob], 'thumb.webp', { type: 'image/webp' });
 
@@ -430,8 +431,14 @@ export function useAssets(args?: AssetsArgs) {
     // 1) delete storage object if needed
     if (source === 'storage') {
       const bucket = getOrgBucketName(organizationId);
-      const { error: stErr } = await supabase.storage.from(bucket).remove([asset.url]);
-      if (stErr) throw stErr;
+
+      const thumbPath = (asset?.meta as any)?.thumbnail_path as string | undefined;
+      const toRemove = [asset.url, thumbPath].filter(Boolean) as string[];
+
+      if (toRemove.length) {
+        const { error: stErr } = await supabase.storage.from(bucket).remove(toRemove);
+        if (stErr) throw stErr;
+      }
     }
 
     // 2) delete row
