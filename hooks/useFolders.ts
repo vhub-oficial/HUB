@@ -2,6 +2,49 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+// Normalize UI category slugs/labels to DB-allowed values (folders_category_type_check).
+// DB allows ONLY:
+// deepfake, voz-clonada, tiktok, musica, sfx, veo3, prova-social, ugc
+function normalizeCategoryType(input: string | null | undefined): string | null {
+  if (!input) return null;
+
+  const raw = String(input).trim();
+  if (!raw) return null;
+
+  // lower + remove accents + normalize separators
+  const s = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  // Already valid
+  const valid = new Set(['deepfake', 'voz-clonada', 'tiktok', 'musica', 'sfx', 'veo3', 'prova-social', 'ugc']);
+  if (valid.has(s)) return s;
+
+  // UI -> DB mappings
+  const map: Record<string, string> = {
+    deepfakes: 'deepfake',
+    deepfake: 'deepfake',
+    'vozes-para-clonar': 'voz-clonada',
+    vozes: 'voz-clonada',
+    voz: 'voz-clonada',
+    'voz-clonada': 'voz-clonada',
+    musicas: 'musica',
+    musica: 'musica',
+    'provas-sociais': 'prova-social',
+    'prova-social': 'prova-social',
+    'depoimentos-ugc': 'ugc',
+    ugc: 'ugc',
+    'veo-3': 'veo3',
+    veo3: 'veo3',
+  };
+
+  return map[s] ?? null;
+}
+
 export type FolderRow = {
   id: string;
   name: string;
@@ -18,6 +61,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
   const parentId = args?.parentId ?? null;
   const type = args?.type ?? null;
   const sort = args?.sort ?? 'recent';
+  const normalizedType = useMemo(() => normalizeCategoryType(type), [type]);
 
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,8 +97,8 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     setLoading(true);
     setError(null);
 
-    if (sort === 'activity' && type && parentId === null) {
-      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: type });
+    if (sort === 'activity' && normalizedType && parentId === null) {
+      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: normalizedType });
       if (e) {
         setError(e.message);
         setFolders([]);
@@ -87,8 +131,8 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     if (parentId === null) q = q.is('parent_id', null);
     else q = q.eq('parent_id', parentId);
 
-    if (supportsCategoryType && type) {
-      q = q.eq('category_type', type);
+    if (supportsCategoryType && normalizedType) {
+      q = q.eq('category_type', normalizedType);
     }
 
     if (sort === 'name') q = q.order('name', { ascending: true });
@@ -104,7 +148,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     }
 
     setLoading(false);
-  }, [organizationId, parentId, sort, supportsCategoryType, type]);
+  }, [organizationId, parentId, sort, supportsCategoryType, normalizedType]);
 
   const getFolderById = useCallback(async (id: string) => {
     if (!organizationId) return null;
@@ -150,8 +194,11 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
 
       const clean = name.trim();
       if (!clean) throw new Error('Nome inválido');
-      const categoryType = opts?.type ?? null;
-      if (!categoryType) throw new Error('Selecione uma categoria antes de criar uma pasta.');
+      const categoryTypeRaw = opts?.type ?? null;
+      const categoryType = normalizeCategoryType(categoryTypeRaw);
+      if (!categoryType) {
+        throw new Error('Categoria inválida para pasta. Selecione uma categoria válida antes de criar.');
+      }
 
       const payload: any = {
         name: clean,
