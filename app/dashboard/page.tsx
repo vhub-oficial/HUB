@@ -844,25 +844,15 @@ export const DashboardPage: React.FC = () => {
                              >
                                {/* Ícone estilo Drive (inline SVG) */}
                                <div className="w-11 h-11 rounded-xl bg-black/30 border border-border flex items-center justify-center">
-                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                    <path
-                                     d="M3.5 7.8c0-1.1.9-2 2-2h4.4c.5 0 1 .2 1.4.6l1 1c.4.4.9.6 1.4.6h4.9c1.1 0 2 .9 2 2v7.6c0 1.1-.9 2-2 2H5.5c-1.1 0-2-.9-2-2V7.8Z"
-                                     stroke="currentColor"
-                                     className="text-gray-200"
-                                     strokeWidth="1.6"
-                                   />
-                                   <circle
-                                     cx="12.4"
-                                     cy="13.2"
-                                     r="3.2"
-                                     stroke="currentColor"
-                                     className="text-gray-200"
-                                     strokeWidth="1.6"
-                                   />
-                                   <path
-                                     d="M11.6 11.8l2.1 1.4-2.1 1.4v-2.8Z"
+                                     d="M10 8.5v7l6-3.5-6-3.5Z"
                                      fill="currentColor"
-                                     className="text-gray-200"
+                                   />
+                                   <path
+                                     d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Z"
+                                     stroke="currentColor"
+                                     strokeWidth="1.5"
                                    />
                                  </svg>
                                </div>
