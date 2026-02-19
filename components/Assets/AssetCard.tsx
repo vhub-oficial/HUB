@@ -5,6 +5,7 @@ import { Play, Link as LinkIcon, Pencil, Trash2, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { useAssets } from '../../hooks/useAssets';
+import { supabase } from '../../lib/supabase';
 
 type Props = {
   asset: AssetRow;
@@ -106,6 +107,14 @@ export const AssetCard: React.FC<Props> = ({
         return;
       }
 
+      const thumbPath = (asset.meta as any)?.thumbnail_path as string | undefined;
+      if (thumbPath) {
+        // ✅ Thumb pública: URL direta (sem signed)
+        const { data } = supabase.storage.from('vhub-thumbs').getPublicUrl(thumbPath);
+        if (mounted) setSrc(data.publicUrl);
+        return;
+      }
+
       const internalThumb = (asset.meta as any)?.thumbnail_url as string | undefined;
       if (mounted) setSrc(internalThumb || '');
     } catch {
@@ -114,7 +123,7 @@ export const AssetCard: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, [asset.id, asset.url, (asset.meta as any)?.thumbnail_url]);
+  }, [asset.id, asset.url, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_url]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
