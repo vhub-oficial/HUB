@@ -1112,16 +1112,22 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] animate-fade-in">
           <div
-            className={[
-              'px-4 py-3 rounded-xl border backdrop-blur bg-black/80',
-              toast.type === 'success'
-                ? 'border-gold/30 text-gray-100'
-                : toast.type === 'error'
-                  ? 'border-red-500/30 text-red-100'
-                  : 'border-border text-gray-200',
-            ].join(' ')}
+            className={`
+              px-6 py-3 rounded-xl shadow-2xl border
+              font-medium text-sm tracking-wide
+              transition-all duration-300
+              ${
+                toast.type === 'error'
+                  ? 'bg-red-600 text-white border-red-400'
+                  : toast.type === 'success'
+                    ? 'bg-yellow-400 text-black border-yellow-300'
+                    : toast.type === 'info'
+                      ? 'bg-yellow-400 text-black border-yellow-300'
+                      : 'bg-black text-white border-border'
+              }
+            `}
           >
             {toast.text}
           </div>
