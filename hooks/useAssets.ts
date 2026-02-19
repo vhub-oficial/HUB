@@ -5,7 +5,9 @@ import { getOrgBucketName } from '../lib/storageHelpers';
 
 let disableActivityLogs = false;
 
-async function imageFileToThumbWebp(file: File, maxW = 480): Promise<Blob> {
+const THUMBS_BUCKET = 'vhub-thumbs';
+
+async function imageFileToThumbWebp(file: File, maxW = 640): Promise<Blob> {
   const img = new Image();
   const url = URL.createObjectURL(file);
 
@@ -38,7 +40,7 @@ async function imageFileToThumbWebp(file: File, maxW = 480): Promise<Blob> {
   }
 }
 
-async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 480): Promise<Blob> {
+async function videoFileToThumbWebp(file: File, seekSeconds = 0.5, maxW = 640): Promise<Blob> {
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
@@ -332,6 +334,7 @@ export function useAssets(args?: AssetsArgs) {
       if (upErr) throw upErr;
 
       let thumbnailPath: string | null = null;
+      let thumbnailUrl: string | null = null;
 
       try {
         const isImg = file.type?.startsWith('image/');
@@ -339,23 +342,31 @@ export function useAssets(args?: AssetsArgs) {
 
         if (isImg || isVid) {
           const thumbBlob = isImg
-            ? await imageFileToThumbWebp(file, 480)
-            : await videoFileToThumbWebp(file, 0.5, 480);
+            ? await imageFileToThumbWebp(file, 640)
+            : await videoFileToThumbWebp(file, 0.5, 640);
 
           const thumbFile = new File([thumbBlob], 'thumb.webp', { type: 'image/webp' });
-          const thumbName = `${crypto.randomUUID()}-thumb.webp`;
-          thumbnailPath = `${folderPath}/thumbs/${thumbName}`;
+          const thumbName = `${genUUID()}-thumb.webp`;
 
-          const upThumb = await supabase.storage.from(bucket).upload(thumbnailPath, thumbFile, {
+          thumbnailPath = `${organizationId}/${folderPath}/thumbs/${thumbName}`;
+
+          const upThumb = await supabase.storage.from(THUMBS_BUCKET).upload(thumbnailPath, thumbFile, {
             upsert: false,
             contentType: 'image/webp',
             cacheControl: '31536000',
           });
 
-          if (upThumb.error) thumbnailPath = null;
+          if (upThumb.error) {
+            thumbnailPath = null;
+            thumbnailUrl = null;
+          } else {
+            const pub = supabase.storage.from(THUMBS_BUCKET).getPublicUrl(thumbnailPath);
+            thumbnailUrl = pub?.data?.publicUrl || null;
+          }
         }
       } catch {
         thumbnailPath = null;
+        thumbnailUrl = null;
       }
 
       const sizeMb = file.size / (1024 * 1024);
@@ -379,7 +390,14 @@ export function useAssets(args?: AssetsArgs) {
             source: 'storage',
             original_name: file.name,
             mime_type: file.type || null,
-            ...(thumbnailPath ? { thumbnail_path: thumbnailPath, thumbnail_mime: 'image/webp' } : {}),
+            ...(thumbnailPath && thumbnailUrl
+              ? {
+                  thumbnail_bucket: THUMBS_BUCKET,
+                  thumbnail_path: thumbnailPath,
+                  thumbnail_url: thumbnailUrl,
+                  thumbnail_mime: 'image/webp',
+                }
+              : {}),
             ...((opts.meta ?? {}) as any),
           },
         })
@@ -516,12 +534,17 @@ export function useAssets(args?: AssetsArgs) {
 
       if (source === 'storage') {
         const bucket = getOrgBucketName(organizationId);
-        const thumbPath = (asset?.meta as any)?.thumbnail_path as string | undefined;
-        const toRemove = [asset.url, thumbPath].filter(Boolean) as string[];
+        const { error: stErr } = await supabase.storage.from(bucket).remove([asset.url]);
+        if (stErr) throw stErr;
 
-        if (toRemove.length) {
-          const { error: stErr } = await supabase.storage.from(bucket).remove(toRemove);
-          if (stErr) throw stErr;
+        try {
+          const tBucket = (asset.meta as any)?.thumbnail_bucket as string | undefined;
+          const tPath = (asset.meta as any)?.thumbnail_path as string | undefined;
+          if (tBucket && tPath) {
+            await supabase.storage.from(tBucket).remove([tPath]);
+          }
+        } catch {
+          // ignore
         }
       }
 
