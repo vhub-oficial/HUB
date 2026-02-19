@@ -526,6 +526,30 @@ export const DashboardPage: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
   };
 
+  const downloadSelectedAsZip = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) throw new Error('Nada selecionado.');
+    await downloadZipFromEdge({ ids, filename: `vhub-${type ?? 'assets'}-${Date.now()}` });
+  };
+
+  const deleteSelectedAssets = async () => {
+    const ids = Array.from(selectedIds).filter(Boolean);
+    if (!ids.length) throw new Error('Nada selecionado.');
+
+    const byId = new Map(scopedAssets.map((a) => [a.id, a]));
+    const assetsToDelete = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    if (!assetsToDelete.length) throw new Error('Nenhum asset selecionado encontrado nesta lista.');
+
+    const ok = window.confirm(`Deletar ${assetsToDelete.length} asset(s)? Essa ação não pode ser desfeita.`);
+    if (!ok) return;
+
+    for (const asset of assetsToDelete) {
+      // eslint-disable-next-line no-await-in-loop
+      await deleteAsset(asset);
+    }
+  };
+
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
     const next = window.prompt('Renomear pasta:', currentName);
@@ -1037,21 +1061,13 @@ export const DashboardPage: React.FC = () => {
             onMouseDown={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-
+              closeCtxMenu();
+              showToast({ type: 'info', text: 'Preparando ZIP…' });
               try {
-                const ids = Array.from(selectedIds);
-                if (!ids.length) return;
-
-                await downloadZipFromEdge({
-                  ids,
-                  filename: `vhub-${type ?? 'assets'}-${Date.now()}`,
-                });
-
-                showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
+                await downloadSelectedAsZip();
+                showToast({ type: 'success', text: 'ZIP gerado — download iniciado.' });
               } catch (e: any) {
-                showToast({ type: 'error', text: e?.message ?? 'Falha no ZIP' });
-              } finally {
-                closeCtxMenu();
+                showToast({ type: 'error', text: e?.message ?? 'Falha ao gerar ZIP' });
               }
             }}
           >
@@ -1060,38 +1076,37 @@ export const DashboardPage: React.FC = () => {
 
           {/* DELETE SELECIONADOS */}
           <button
-            className="w-full text-left px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10"
+            className="w-full text-left px-3 py-2 rounded-lg text-red-300 hover:bg-white/5"
             onMouseDown={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-
-              const ids = Array.from(selectedIds);
-              if (!ids.length) return;
-
-              const confirmed = window.confirm(
-                `Tem certeza que deseja deletar ${ids.length} item(ns)?`
-              );
-              if (!confirmed) return;
-
+              closeCtxMenu();
+              showToast({ type: 'info', text: 'Deletando selecionados…' });
               try {
-                for (const id of ids) {
-                  // eslint-disable-next-line no-await-in-loop
-                  await deleteAsset(id);
-                }
-
+                await deleteSelectedAssets();
                 setSelectedIds(new Set());
                 setAnchorIndex(null);
                 refresh();
-
-                showToast({ type: 'success', text: 'Itens deletados com sucesso' });
+                showToast({ type: 'success', text: 'Selecionados deletados.' });
               } catch (e: any) {
-                showToast({ type: 'error', text: e?.message ?? 'Erro ao deletar' });
-              } finally {
-                closeCtxMenu();
+                showToast({ type: 'error', text: e?.message ?? 'Falha ao deletar' });
               }
             }}
           >
             Deletar selecionados
+          </button>
+
+          <button
+            className="w-full text-left px-3 py-2 rounded-lg text-gray-200 hover:bg-white/5"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeCtxMenu();
+              setSelectedIds(new Set());
+              setAnchorIndex(null);
+            }}
+          >
+            Limpar seleção
           </button>
         </div>
       )}
