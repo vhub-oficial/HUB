@@ -882,9 +882,24 @@ export const DashboardPage: React.FC = () => {
                              <button
                                className="w-full text-left p-4 flex items-center gap-3"
                                onClick={() => {
+                                 setFolderMenuOpenId(null);
+
+                                 // Se estamos em "Últimos Adicionados" (sem filtro de categoria e sem busca),
+                                 // o clique deve ser um atalho de navegação para a área correta (FolderPage),
+                                 // e NÃO "abrir dentro do Dashboard" via ?folder=.
+                                 const isLastAddedContext = !type && !isSearching && !q?.trim();
+
+                                 if (isLastAddedContext) {
+                                   // FolderPage consegue abrir só com :id; mas passar type melhora consistência da UI/abas.
+                                   const folderType = (f as any)?.category_type ? String((f as any).category_type).toLowerCase() : null;
+                                   const qs = folderType ? `?type=${encodeURIComponent(folderType)}` : '';
+                                   navigate(`/folders/${f.id}${qs}`, { replace: false });
+                                   return;
+                                 }
+
+                                 // Comportamento atual (navegação dentro do dashboard)
                                  setFolderInUrl(f.id);
                                  setFilters({ tags: '', meta: {} });
-                                 setFolderMenuOpenId(null);
                                }}
                              >
                                {/* Ícone estilo Drive (inline SVG) */}
