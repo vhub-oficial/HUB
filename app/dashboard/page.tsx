@@ -262,6 +262,26 @@ export const DashboardPage: React.FC = () => {
     );
   }, [location.pathname, location.search, navigate]);
 
+  // Navigate to the correct category tab + folder in URL (premium UX)
+  const openFolderInCorrectTab = useCallback(
+    (folderId: string, categoryType?: string | null) => {
+      const sp = new URLSearchParams(location.search);
+
+      if (categoryType && String(categoryType).trim()) {
+        sp.set('type', String(categoryType).trim());
+      } else {
+        // if folder has no category_type, keep current type as-is (do not delete)
+      }
+
+      sp.set('folder', folderId);
+      sp.delete('q'); // optional: clear global search when explicitly opening a folder
+
+      const nextSearch = sp.toString();
+      navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+    },
+    [location.pathname, location.search, navigate]
+  );
+
   const normalizedType = useMemo(() => normalizeCategoryType(type ?? null), [type]);
 
   const foldersForCategory = useMemo(() => {
@@ -882,24 +902,11 @@ export const DashboardPage: React.FC = () => {
                              <button
                                className="w-full text-left p-4 flex items-center gap-3"
                                onClick={() => {
-                                 setFolderMenuOpenId(null);
-
-                                 // Se estamos em "Últimos Adicionados" (sem filtro de categoria e sem busca),
-                                 // o clique deve ser um atalho de navegação para a área correta (FolderPage),
-                                 // e NÃO "abrir dentro do Dashboard" via ?folder=.
-                                 const isLastAddedContext = !type && !isSearching && !q?.trim();
-
-                                 if (isLastAddedContext) {
-                                   // FolderPage consegue abrir só com :id; mas passar type melhora consistência da UI/abas.
-                                   const folderType = (f as any)?.category_type ? String((f as any).category_type).toLowerCase() : null;
-                                   const qs = folderType ? `?type=${encodeURIComponent(folderType)}` : '';
-                                   navigate(`/folders/${f.id}${qs}`, { replace: false });
-                                   return;
-                                 }
-
-                                 // Comportamento atual (navegação dentro do dashboard)
-                                 setFolderInUrl(f.id);
+                                 // Instead of opening inside dashboard without a category,
+                                 // send user to the correct tab (type) + folder.
+                                 openFolderInCorrectTab(f.id, (f as any).category_type ?? null);
                                  setFilters({ tags: '', meta: {} });
+                                 setFolderMenuOpenId(null);
                                }}
                              >
                                {/* Ícone estilo Drive (inline SVG) */}
