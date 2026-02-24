@@ -10,77 +10,81 @@ type Props = {
 export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Props) {
   const { enqueueFiles, open } = useUploadQueue();
   const [dragging, setDragging] = React.useState(false);
-  const dragDepth = React.useRef(0);
+  const closeOverlay = React.useCallback(() => setDragging(false), []);
+
+  const onDragEnter = React.useCallback((e: DragEvent) => {
+    if (!enabled) return;
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      setDragging(true);
+    }
+  }, [enabled]);
+
+  const onDragOver = React.useCallback((e: DragEvent) => {
+    if (!enabled) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  }, [enabled]);
+
+  const onDragLeave = React.useCallback((e: DragEvent) => {
+    if (!enabled) return;
+
+    const rt = (e.relatedTarget as EventTarget | null) ?? null;
+    if (!rt) {
+      closeOverlay();
+    }
+  }, [enabled, closeOverlay]);
+
+  const onDrop = React.useCallback((e: DragEvent) => {
+    if (!enabled) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    closeOverlay();
+
+    const t = e.target as Element | null;
+    const insideLocalDropzone = t?.closest?.('[data-local-dropzone="true"]');
+    if (insideLocalDropzone) return;
+
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (!files.length) return;
+    if (!categoryType) {
+      alert('Selecione uma categoria antes de soltar arquivos.');
+      return;
+    }
+
+    enqueueFiles(files, { categoryType, folderId });
+    open();
+  }, [enabled, closeOverlay, enqueueFiles, open, categoryType, folderId]);
 
   React.useEffect(() => {
     if (!enabled) return;
-
-    const onDragEnter = (e: DragEvent) => {
-      if (!e.dataTransfer) return;
-      if (!Array.from(e.dataTransfer.types).includes('Files')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragDepth.current += 1;
-      setDragging(true);
-    };
-
-    const onDragOver = (e: DragEvent) => {
-      if (!e.dataTransfer) return;
-      if (!Array.from(e.dataTransfer.types).includes('Files')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      // keep visible
-      setDragging(true);
-    };
-
-    const onDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragDepth.current = Math.max(0, dragDepth.current - 1);
-      if (dragDepth.current === 0) setDragging(false);
-    };
-
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      try {
-        if (!e.dataTransfer) return;
-
-        // Se o drop aconteceu dentro de um dropzone local, ignora.
-        const t = e.target as Element | null;
-        if (t && typeof (t as any).closest === 'function') {
-          const insideLocalDropzone = (t as any).closest('[data-local-dropzone="true"]');
-          if (insideLocalDropzone) return;
-        }
-
-        const files = Array.from(e.dataTransfer.files ?? []);
-        if (!files.length) return;
-        if (!categoryType) {
-          alert('Selecione uma categoria antes de soltar arquivos.');
-          return;
-        }
-
-        enqueueFiles(files, { categoryType, folderId });
-        open();
-      } finally {
-        dragDepth.current = 0;
-        setDragging(false);
-      }
-    };
 
     window.addEventListener('dragenter', onDragEnter);
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('dragleave', onDragLeave);
     window.addEventListener('drop', onDrop);
 
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') closeOverlay();
+    };
+    const onBlur = () => closeOverlay();
+    const onDragEnd = () => closeOverlay();
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('dragend', onDragEnd as EventListener);
+
     return () => {
       window.removeEventListener('dragenter', onDragEnter);
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
+
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('dragend', onDragEnd as EventListener);
     };
-  }, [enabled, categoryType, folderId, enqueueFiles, open]);
+  }, [enabled, onDragEnter, onDragOver, onDragLeave, onDrop, closeOverlay]);
 
   if (!enabled || !dragging) return null;
 
