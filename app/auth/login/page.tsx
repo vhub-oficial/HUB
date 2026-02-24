@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -11,7 +11,8 @@ export const LoginPage: React.FC = () => {
 
   const [isRegistering, setIsRegistering] = React.useState(false);
   const [isForgot, setIsForgot] = React.useState(false);
-  const [showVerifyEmail, setShowVerifyEmail] = React.useState(false);
+  const [success, setSuccess] = React.useState(false);
+  const [redirecting, setRedirecting] = React.useState(false);
   const [provisioning, setProvisioning] = React.useState(false);
 
   const [name, setName] = React.useState('');
@@ -118,11 +119,15 @@ export const LoginPage: React.FC = () => {
         });
         if (error) throw error;
         localStorage.setItem(storageKeyForJoinCode(cleanEmail), orgCode.trim());
-        setShowVerifyEmail(true);
+        setSuccess(true);
+        setRedirecting(true);
         setIsRegistering(false);
         setIsForgot(false);
         setPassword('');
-        setInfo('Conta criada! Agora confirme seu e-mail para liberar seu acesso.');
+
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
         return;
       }
 
@@ -135,35 +140,17 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  if (showVerifyEmail) {
+  if (success) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-6">
-          <div className="text-white text-xl font-semibold">Verifique seu e-mail</div>
-          <div className="mt-3 text-gray-300 text-sm">
-            Enviamos um link de confirmação para <span className="text-white font-medium">{email.trim()}</span>.
-            {' '}Abra sua caixa de entrada e confirme para liberar o acesso.
-          </div>
-          {info && <div className="mt-3 text-amber-300 text-sm">{info}</div>}
-          {err && <div className="mt-3 text-red-400 text-sm">{err}</div>}
-          <div className="mt-6 flex gap-2 justify-end">
-            <button
-              className="px-4 py-2 rounded-xl border border-border bg-black/40 text-gray-200 hover:bg-black/30"
-              onClick={() => setShowVerifyEmail(false)}
-            >
-              Voltar
-            </button>
-            <button
-              className="px-4 py-2 rounded-xl bg-gold text-black font-semibold"
-              onClick={() => {
-                setShowVerifyEmail(false);
-                setIsRegistering(false);
-                setIsForgot(false);
-              }}
-            >
-              Ir para login
-            </button>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-surface border border-border rounded-2xl p-10 w-full max-w-md text-center">
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Cadastro concluído com sucesso!
+          </h2>
+          <p className="text-gray-400 mb-6">
+            Aguarde, estamos te redirecionando para sua organização...
+          </p>
+          {redirecting && <Loader2 className="animate-spin mx-auto text-gold" size={32} />}
         </div>
       </div>
     );
@@ -288,7 +275,7 @@ export const LoginPage: React.FC = () => {
             onClick={() => {
               setErr(null);
               setInfo(null);
-              setShowVerifyEmail(false);
+              setSuccess(false);
               setIsForgot(false);
               setIsRegistering((v) => !v);
             }}
