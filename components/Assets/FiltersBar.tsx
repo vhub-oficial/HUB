@@ -85,25 +85,25 @@ export const FiltersBar: React.FC<{
       {spec.fields.map((f) => (
         <select
           key={f.key}
-          className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40"
+          className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40 focus:outline-none focus:ring-2 focus:ring-gold/40"
           value={value.meta[f.key] ?? ''}
           onChange={(e) => onChange({ ...value, meta: { ...value.meta, [f.key]: e.target.value } })}
         >
-          <option value="">{f.labelAll}</option>
+          <option className="bg-black text-white" value="">{f.labelAll}</option>
           {(options.meta?.[f.key] ?? []).map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
+            <option className="bg-black text-white" key={opt} value={opt}>{opt}</option>
           ))}
         </select>
       ))}
 
       <select
-        className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40"
+        className="bg-black/30 border border-border rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-200 hover:border-gold/40 focus:outline-none focus:ring-2 focus:ring-gold/40"
         value={value.tags ?? ''}
         onChange={(e) => onChange({ ...value, tags: e.target.value })}
       >
-        <option value="">TODAS AS TAGS</option>
+        <option className="bg-black text-white" value="">TODAS AS TAGS</option>
         {options.tags.map((t) => (
-          <option key={t} value={t}>{t}</option>
+          <option className="bg-black text-white" key={t} value={t}>{t}</option>
         ))}
       </select>
 

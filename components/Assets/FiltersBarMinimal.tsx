@@ -33,39 +33,39 @@ export const FiltersBarMinimal: React.FC<Props> = ({
       </div>
 
       <select
-        className="bg-black/40 border border-border rounded-lg px-3 py-1.5"
+        className="bg-black/40 border border-border rounded-lg px-3 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-gold/40"
         value={produto ?? ''}
         onChange={(event) => onChange({ produto: event.target.value || null })}
       >
-        <option value="">TODOS OS PRODUTOS</option>
+        <option className="bg-black text-white" value="">TODOS OS PRODUTOS</option>
         {produtos.map((option) => (
-          <option key={option} value={option}>
+          <option className="bg-black text-white" key={option} value={option}>
             {option}
           </option>
         ))}
       </select>
 
       <select
-        className="bg-black/40 border border-border rounded-lg px-3 py-1.5"
+        className="bg-black/40 border border-border rounded-lg px-3 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-gold/40"
         value={dimensao ?? ''}
         onChange={(event) => onChange({ dimensao: event.target.value || null })}
       >
-        <option value="">TODAS AS DIMENSÕES</option>
+        <option className="bg-black text-white" value="">TODAS AS DIMENSÕES</option>
         {dimensoes.map((option) => (
-          <option key={option} value={option}>
+          <option className="bg-black text-white" key={option} value={option}>
             {option}
           </option>
         ))}
       </select>
 
       <select
-        className="bg-black/40 border border-border rounded-lg px-3 py-1.5"
+        className="bg-black/40 border border-border rounded-lg px-3 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-gold/40"
         value={tag ?? ''}
         onChange={(event) => onChange({ tag: event.target.value || null })}
       >
-        <option value="">TODAS AS TAGS</option>
+        <option className="bg-black text-white" value="">TODAS AS TAGS</option>
         {tags.map((option) => (
-          <option key={option} value={option}>
+          <option className="bg-black text-white" key={option} value={option}>
             {option}
           </option>
         ))}

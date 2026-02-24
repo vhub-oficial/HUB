@@ -15,7 +15,7 @@ export type FolderRow = {
 };
 
 export function useFolders(args?: { parentId?: string | null; type?: string | null; sort?: 'recent' | 'name' | 'activity' }) {
-  const { organizationId, user } = useAuth();
+  const { organizationId, user, role } = useAuth();
   const parentId = args?.parentId ?? null;
   const type = args?.type ?? null;
   const sort = args?.sort ?? 'recent';
@@ -149,6 +149,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
   const createFolder = useCallback(
     async (name: string, opts?: { parentId?: string | null; type?: string | null }) => {
       if (!organizationId || !user?.id) throw new Error('Sem organização/usuário');
+      if (role === 'viewer') throw new Error('Você não tem permissão para criar pastas.');
 
       const clean = name.trim();
       if (!clean) throw new Error('Nome inválido');
@@ -177,11 +178,12 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
       setFolders((prev) => [data as FolderRow, ...prev]);
       return data as FolderRow;
     },
-    [organizationId, user?.id],
+    [organizationId, user?.id, role],
   );
 
 
   const renameFolder = useCallback(async (folderId: string, nextName: string) => {
+    if (role === 'viewer') throw new Error('Você não tem permissão para renomear pastas.');
     const name = nextName.trim();
     if (!name) throw new Error('Nome inválido.');
 
@@ -196,9 +198,10 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
 
     setFolders((prev) => prev.map((f) => (f.id === folderId ? (data as any) : f)));
     return data;
-  }, [supabase]);
+  }, [role]);
 
   const deleteFolder = useCallback(async (folderId: string) => {
+    if (role === 'viewer') throw new Error('Você não tem permissão para apagar pastas.');
     const { error: detachErr } = await supabase
       .from('assets')
       .update({ folder_id: null })
@@ -214,7 +217,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     if (delErr) throw delErr;
 
     setFolders((prev) => prev.filter((f) => f.id !== folderId));
-  }, [supabase]);
+  }, [role]);
 
   return useMemo(() => ({
     folders,

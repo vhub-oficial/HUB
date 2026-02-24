@@ -241,7 +241,7 @@ export const AssetDetailPage: React.FC = () => {
             <div className="text-white font-semibold">{asset.type ?? '—'}</div>
           </div>
 
-          <div className="aspect-video bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-black/60 flex items-center justify-center p-4 overflow-hidden">
             {asset.meta?.source === 'external' ? (
               isExternalEmbed && previewUrl ? (
                 <div className="w-full aspect-video rounded-2xl overflow-hidden border border-border bg-black/30">
@@ -264,7 +264,13 @@ export const AssetDetailPage: React.FC = () => {
                 </a>
               )
             ) : previewUrl ? (
-              <video src={previewUrl} controls className="w-full rounded-2xl" />
+              <div className="w-full flex items-center justify-center">
+                <video
+                  src={previewUrl}
+                  controls
+                  className="rounded-2xl max-h-[70vh] max-w-full w-auto object-contain"
+                />
+              </div>
             ) : (
               <div className="text-gray-500">Sem preview</div>
             )}
