@@ -25,7 +25,7 @@ export const DashboardPage: React.FC = () => {
   const didUserClearFolderRef = React.useRef(false);
   const q = searchParams.get('q') ?? '';
   const isSearching = !type && !!q.trim();
-  const { organizationId } = useAuth();
+  const { organizationId, role } = useAuth();
 
   const isEventInsideSelectionCtxMenu = (ev: MouseEvent) => {
     const path = (ev.composedPath?.() ?? []) as any[];
@@ -183,6 +183,7 @@ export const DashboardPage: React.FC = () => {
     return null;
   }, [activeFolderId]);
   const { options } = useFilterOptions(type, effectiveFolderId);
+  // Usaremos o mesmo seletor para ordenar também os assets.
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
@@ -275,6 +276,18 @@ export const DashboardPage: React.FC = () => {
     if (foldersSort === 'za') next = [...next].reverse();
     return next;
   }, [foldersForCategory, folderSearch, foldersSort]);
+
+  const canManageFolders = role === 'admin' || role === 'editor';
+
+  const assetsSorted = useMemo(() => {
+    const list = [...(scopedAssets ?? [])];
+    if (foldersSort === 'az') {
+      list.sort((a, b) => String(a?.name ?? '').localeCompare(String(b?.name ?? ''), undefined, { sensitivity: 'base' }));
+    } else if (foldersSort === 'za') {
+      list.sort((a, b) => String(b?.name ?? '').localeCompare(String(a?.name ?? ''), undefined, { sensitivity: 'base' }));
+    }
+    return list;
+  }, [scopedAssets, foldersSort]);
 
   useEffect(() => {
     if (!type) return;
@@ -758,7 +771,7 @@ export const DashboardPage: React.FC = () => {
                      {/* Controles à direita (sempre) */}
                      <div className="flex items-center gap-2">
                        <select
-                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-gold/40"
                          value={foldersSort}
                          onChange={(e) => setFoldersSort(e.target.value as any)}
                        >
@@ -827,12 +840,14 @@ export const DashboardPage: React.FC = () => {
                        )}
 
 
-                      <button
-                        className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
-                        onClick={() => setNewFolderOpen(true)}
-                       >
-                         + Nova pasta
-                       </button>
+                      {canManageFolders && (
+                        <button
+                          className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white hover:border-gold/40"
+                          onClick={() => setNewFolderOpen(true)}
+                        >
+                          + Nova pasta
+                        </button>
+                      )}
                      </div>
                    </div>
 
@@ -903,7 +918,7 @@ export const DashboardPage: React.FC = () => {
                                  …
                                </button>
 
-                               {folderMenuOpenId === f.id && (
+                               {folderMenuOpenId === f.id && canManageFolders && (
                                  <div className="absolute right-0 mt-2 w-44 rounded-xl border border-border bg-black/90 backdrop-blur p-2 z-20">
                                    <button
                                      className="w-full text-left px-3 py-2 rounded-lg text-gray-100 hover:bg-white/5"
@@ -991,7 +1006,7 @@ export const DashboardPage: React.FC = () => {
                    }}
                  >
                     <AssetGrid
-                      assets={scopedAssets}
+                      assets={assetsSorted}
                       selectedIds={selectedIds}
                       selectionMode={selectionMode}
                       onToggleSelect={handleToggleSelect}

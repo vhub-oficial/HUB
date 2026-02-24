@@ -103,6 +103,14 @@ export const NewAssetModal: React.FC<{
     }
   }, [open, initialFolderId]);
 
+
+  React.useEffect(() => {
+    if (open && role === 'viewer') {
+      alert('Você não tem permissão para fazer upload.');
+      onClose();
+    }
+  }, [open, role, onClose]);
+
   if (!open) return null;
 
   const canCreate = role === 'admin' || role === 'editor';
