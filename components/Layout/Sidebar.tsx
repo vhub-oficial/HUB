@@ -16,14 +16,36 @@ import {
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
+  const normalizeType = (input: string | null | undefined) => {
+    if (!input) return null;
+    const t = String(input).trim().toLowerCase();
+
+    const map: Record<string, string> = {
+      'veo-3': 'veo3',
+      veo_3: 'veo3',
+      deepfake: 'deepfakes',
+      voz: 'vozes',
+      musica: 'musicas',
+      'prova-social': 'provas-sociais',
+      provas_sociais: 'provas-sociais',
+      provassociais: 'provas-sociais',
+      ugc: 'depoimentos-ugc',
+      depoimentosugc: 'depoimentos-ugc',
+      depoimentos_ugc: 'depoimentos-ugc',
+    };
+
+    return map[t] ?? t;
+  };
+
   const { role } = useAuth();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const currentType = searchParams.get('type');
+  const currentType = normalizeType(searchParams.get('type'));
 
   const isActive = (path: string, type?: string) => {
-    if (type) {
-        return currentType === type;
+    const normalizedLinkType = normalizeType(type);
+    if (normalizedLinkType) {
+      return currentType === normalizedLinkType;
     }
     return location.pathname === path && !currentType;
   };
