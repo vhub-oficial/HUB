@@ -51,7 +51,7 @@ export const normalizeAuthError = (error: unknown, fallback = 'Ocorreu um erro d
     return 'E-mail ou senha inválidos.';
   }
   if (lower.includes('email not confirmed')) {
-    return 'Confirme seu e-mail antes de entrar.';
+    return 'Não foi possível entrar. Verifique suas credenciais e tente novamente.';
   }
   if (lower.includes('user already registered') || lower.includes('user_already_registered')) {
     return 'Este e-mail já está cadastrado.';
