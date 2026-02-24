@@ -1,12 +1,11 @@
 
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Topbar } from './components/Layout/Topbar';
 import { DashboardPage } from './app/dashboard/page';
-import { FolderPage } from './app/folders/[id]/page';
 import { AssetDetailPage } from './app/assets/[id]/page';
 import { ProfilePage } from './app/profile/page';
 import { LoginPage } from './app/auth/login/page';
@@ -25,6 +24,18 @@ import { Button } from './components/UI/Button';
 
 const storageKeyForJoinCode = (email: string) =>
   `vhub:join_code:${(email || '').toLowerCase().trim()}`;
+
+// Legacy folder route redirect (avoid "ghost page" + runtime errors)
+const FolderRouteRedirect: React.FC = () => {
+  const { id } = useParams();
+  const location = useLocation();
+  const sp = new URLSearchParams(location.search);
+
+  if (id && id !== 'root') sp.set('folder', id);
+
+  // keep existing type if present in URL, do not force
+  return <Navigate to={{ pathname: '/dashboard', search: `?${sp.toString()}` }} replace />;
+};
 
 const ProvisioningGate: React.FC<{ email?: string | null }> = ({ email }) => {
   const navigate = useNavigate();
@@ -306,9 +317,9 @@ const App: React.FC = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
 
-              {/* Folder Routes */}
-              <Route path="/folders/:id" element={<FolderPage />} />
-              <Route path="/folders/root" element={<FolderPage />} />
+              {/* Legacy Folder Routes (redirect to dashboard shell) */}
+              <Route path="/folders/:id" element={<FolderRouteRedirect />} />
+              <Route path="/folders/root" element={<FolderRouteRedirect />} />
 
               {/* Asset detail */}
               <Route path="/assets/:id" element={<AssetDetailPage />} />
