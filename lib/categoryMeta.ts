@@ -1,42 +1,46 @@
-export type MetaFieldKey =
-  | 'produto'
-  | 'dimensao'
-  | 'personagem'
-  | 'versao'
-  | 'nicho'
-  | 'genero'
-  | 'tipo'
-  | 'momento_vsl'
-  | 'emocao'
-  | 'faixa_etaria'
-  | 'genero_ator';
+import { normalizeCategoryType } from './categoryType';
 
 export type MetaFieldDef = {
-  key: MetaFieldKey;
+  key: string;
   label: string;
-  placeholder?: string;
 };
 
-const F = (key: MetaFieldKey, label: string, placeholder?: string): MetaFieldDef => ({
-  key,
-  label,
-  placeholder,
-});
+const F = (key: string, label: string): MetaFieldDef => ({ key, label });
 
+/**
+ * ✅ Fonte ÚNICA da verdade dos campos meta por categoria.
+ * Chaves aqui DEVEM ser CANÔNICAS (retorno de normalizeCategoryType):
+ * deepfake, voz-clonada, tiktok, musica, sfx, veo3, prova-social, ugc
+ */
 export const CATEGORY_META_FIELDS: Record<string, MetaFieldDef[]> = {
-  veo3: [F('produto', 'Produto/Objeto do insert'), F('dimensao', 'Dimensão')],
-  tiktok: [F('produto', 'Produto'), F('nicho', 'Nicho'), F('tipo', 'Tipo'), F('momento_vsl', 'Momento VSL')],
-  deepfakes: [F('personagem', 'Personagem'), F('versao', 'Versão')],
-  vozes: [F('personagem', 'Personagem'), F('versao', 'Versão'), F('genero', 'Gênero')],
-  ugc: [F('produto', 'Produto'), F('faixa_etaria', 'Faixa etária'), F('genero_ator', 'Gênero do ator')],
-  musicas: [F('genero', 'Gênero'), F('tipo', 'Tipo')],
-  sfx: [F('tipo', 'Tipo')],
-  provas_sociais: [F('produto', 'Produto'), F('nicho', 'Nicho')],
-  depoimentos_ugc: [F('produto', 'Produto'), F('nicho', 'Nicho')],
-  'provas-sociais': [F('produto', 'Produto'), F('nicho', 'Nicho')],
+  deepfake: [F('personagem', 'Personagem'), F('versao', 'Versão')],
+
+  'voz-clonada': [F('personagem', 'Personagem'), F('versao', 'Versão'), F('genero', 'Gênero')],
+
+  tiktok: [
+    F('produto', 'Produto'),
+    F('nicho', 'Nicho'),
+    F('tipo', 'Tipo'),
+    F('momento_vsl', 'Momento da VSL'),
+  ],
+
+  musica: [F('momento_vsl', 'Momentos da VSL'), F('emocao', 'Emoções')],
+
+  sfx: [F('momento_vsl', 'Momentos da VSL'), F('emocao', 'Emoções')],
+
+  veo3: [F('produto', 'Produto'), F('dimensao', 'Dimensão')],
+
+  'prova-social': [F('nicho', 'Nichos'), F('genero', 'Gêneros')],
+
+  ugc: [F('genero', 'Gêneros'), F('faixa_etaria', 'Idades')],
 };
 
-export function getCategoryMetaFields(type?: string | null) {
-  const t = (type ?? '').toLowerCase();
-  return CATEGORY_META_FIELDS[t] ?? [];
+/**
+ * Resolve campos meta de forma segura:
+ * aceita inputs do UI (plural) e do banco (canônico).
+ */
+export function getCategoryMetaFields(inputType: string | null | undefined): MetaFieldDef[] {
+  const normalized = normalizeCategoryType(inputType);
+  if (!normalized) return [];
+  return CATEGORY_META_FIELDS[normalized] ?? [];
 }
