@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
  * This keeps multi-tenant security intact (no fake org/role on the client).
  */
 export const PendingAccessPage: React.FC = () => {
-  const { user, signOut, refreshProfile } = useAuth();
+  const { signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -19,7 +19,6 @@ export const PendingAccessPage: React.FC = () => {
   const [ok, setOk] = React.useState<string | null>(null);
   const [mode, setMode] = React.useState<'auto' | 'manual'>('auto');
   const [seconds, setSeconds] = React.useState(0);
-  const [retryClicks, setRetryClicks] = React.useState(0);
 
   const join = async () => {
     setErr(null);
@@ -95,7 +94,7 @@ export const PendingAccessPage: React.FC = () => {
   }, [seconds]);
 
   // Último caso: só libera manual se demorou bastante OU após 2 “Tentar novamente”
-  const manualUnlocked = seconds >= 18 || retryClicks >= 2;
+  const manualUnlocked = seconds >= 18;
 
   const Stepper = ({ current }: { current: number }) => {
     return (
@@ -141,11 +140,9 @@ export const PendingAccessPage: React.FC = () => {
       <div className="w-full max-w-lg bg-surface border border-border rounded-xl p-8">
         {mode === 'auto' ? (
           <>
-            <h1 className="text-2xl font-bold text-white">Preparando seu acesso</h1>
+            <h1 className="text-2xl font-bold text-white">Aguarde, estamos vinculando sua conta com sua organização</h1>
             <p className="text-gray-400 mt-2">
-              Estamos configurando sua conta no workspace…
-              <br />
-              <span className="text-gray-300">{user?.email}</span>
+              Isso pode levar alguns segundos. Assim que concluir, você será redirecionado automaticamente.
             </p>
 
             <div className="mt-6 flex items-center gap-3">
@@ -162,13 +159,9 @@ export const PendingAccessPage: React.FC = () => {
 
             <div className="mt-6 flex gap-3">
               <Button
-                onClick={async () => {
-                  setErr(null);
-                  setOk(null);
-                  setRetryClicks((n) => n + 1);
-                  // não reseta seconds: mantém sensação de progresso contínuo
-                  const p = await refreshProfile();
-                  if (p) navigate('/dashboard', { replace: true });
+                onClick={() => {
+                  // Reinicia o fluxo automático/polling de forma simples e confiável
+                  window.location.reload();
                 }}
                 variant="secondary"
               >
