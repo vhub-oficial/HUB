@@ -48,13 +48,34 @@ const SPEC_LABELS: Record<string, { title: string; fields: { key: string; labelA
       { key: 'genero', labelAll: 'TODOS OS GÊNEROS' },
     ],
   },
-  ugc: {
+  'depoimentos-ugc': {
     title: 'DEPOIMENTOS UGC',
     fields: [
       { key: 'genero_ator', labelAll: 'TODOS OS GÊNEROS' },
       { key: 'faixa_etaria', labelAll: 'TODAS AS IDADES' },
     ],
   },
+};
+
+const normalizeType = (input: string | null | undefined) => {
+  if (!input) return null;
+  const t = String(input).trim().toLowerCase();
+
+  const map: Record<string, string> = {
+    'veo-3': 'veo3',
+    veo_3: 'veo3',
+    deepfake: 'deepfakes',
+    voz: 'vozes',
+    musica: 'musicas',
+    'prova-social': 'provas-sociais',
+    provas_sociais: 'provas-sociais',
+    provassociais: 'provas-sociais',
+    ugc: 'depoimentos-ugc',
+    depoimentosugc: 'depoimentos-ugc',
+    depoimentos_ugc: 'depoimentos-ugc',
+  };
+
+  return map[t] ?? t;
 };
 
 export type FiltersValue = {
@@ -72,7 +93,8 @@ export const FiltersBar: React.FC<{
     meta: Record<string, string[]>;
   };
 }> = ({ type, value, onChange, onClear, options }) => {
-  const spec = SPEC_LABELS[type];
+  const normalizedType = normalizeType(type);
+  const spec = normalizedType ? SPEC_LABELS[normalizedType] : null;
   if (!spec) return null;
 
   return (

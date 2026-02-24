@@ -13,12 +13,33 @@ import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
 import { normalizeCategoryType } from '../../lib/categoryType';
 
 export const DashboardPage: React.FC = () => {
+  const normalizeType = (input: string | null | undefined) => {
+    if (!input) return null;
+    const t = String(input).trim().toLowerCase();
+
+    const map: Record<string, string> = {
+      'veo-3': 'veo3',
+      veo_3: 'veo3',
+      deepfake: 'deepfakes',
+      voz: 'vozes',
+      musica: 'musicas',
+      'prova-social': 'provas-sociais',
+      provas_sociais: 'provas-sociais',
+      provassociais: 'provas-sociais',
+      ugc: 'depoimentos-ugc',
+      depoimentosugc: 'depoimentos-ugc',
+      depoimentos_ugc: 'depoimentos-ugc',
+    };
+
+    return map[t] ?? t;
+  };
+
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const typeRaw = searchParams.get('type');
   const folderFromUrl = searchParams.get('folder');
-  const type = typeRaw ? typeRaw.toLowerCase() : null;
+  const type = normalizeType(typeRaw);
   const lastFolderKey = React.useMemo(() => {
     return type ? `vhub:lastFolder:${type}` : null;
   }, [type]);
@@ -267,8 +288,9 @@ export const DashboardPage: React.FC = () => {
     (folderId: string, categoryType?: string | null) => {
       const sp = new URLSearchParams(location.search);
 
-      if (categoryType && String(categoryType).trim()) {
-        sp.set('type', String(categoryType).trim());
+      const normalized = normalizeType(categoryType);
+      if (normalized?.trim()) {
+        sp.set('type', normalized);
       } else {
         // if folder has no category_type, keep current type as-is (do not delete)
       }
