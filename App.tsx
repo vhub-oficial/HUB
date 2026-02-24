@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { Sidebar } from './components/Layout/Sidebar';
@@ -21,52 +21,184 @@ import { NewAssetModal } from './components/Assets/NewAssetModal';
 import { UploadQueueProvider } from './contexts/UploadQueueContext';
 import { UploadTray } from './components/Uploads/UploadTray';
 import { supabase } from './lib/supabase';
+import { Button } from './components/UI/Button';
 
-const storageKeyForJoinCode = (email: string) => `vhub:join_code:${email.toLowerCase().trim()}`;
+const storageKeyForJoinCode = (email: string) =>
+  `vhub:join_code:${(email || '').toLowerCase().trim()}`;
 
 const ProvisioningGate: React.FC<{ email?: string | null }> = ({ email }) => {
-  const [status, setStatus] = React.useState<'loading' | 'failed'>('loading');
+  const navigate = useNavigate();
+  const { refreshProfile, signOut } = useAuth() as any;
 
-  React.useEffect(() => {
-    let mounted = true;
+  const [seconds, setSeconds] = React.useState(0);
+  const [retryClicks, setRetryClicks] = React.useState(0);
+  const [mode, setMode] = React.useState<'auto' | 'manual'>('auto');
+  const [busy, setBusy] = React.useState(false);
+  const [code, setCode] = React.useState('');
+  const [err, setErr] = React.useState<string | null>(null);
 
-    (async () => {
-      try {
-        const cleanEmail = (email ?? '').trim();
-        if (!cleanEmail) throw new Error('missing-email');
+  const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const stoppedRef = React.useRef(false);
 
-        const key = storageKeyForJoinCode(cleanEmail);
-        const code = localStorage.getItem(key)?.trim();
-        if (!code) throw new Error('missing-code');
+  const manualUnlocked = seconds >= 20 || retryClicks >= 2;
 
-        // tenta vincular automaticamente (RPC já existente no /pending)
-        const { error } = await supabase.rpc('join_org_by_code', { p_code: code });
-        if (error) throw error;
+  const stopPolling = React.useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
-        // se deu certo, limpamos o code e recarregamos para o AuthContext pegar o profile
-        localStorage.removeItem(key);
-        window.location.assign('/#/dashboard');
-      } catch {
-        if (mounted) setStatus('failed');
-      }
-    })();
+  const tryRefreshUntilReady = React.useCallback(async () => {
+    const p = await refreshProfile?.();
+    if (p) {
+      stopPolling();
+      navigate('/dashboard', { replace: true });
+      return true;
+    }
+    return false;
+  }, [navigate, refreshProfile, stopPolling]);
 
-    return () => {
-      mounted = false;
-    };
+  const tryAutoJoin = React.useCallback(async () => {
+    setErr(null);
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    const key = storageKeyForJoinCode(cleanEmail);
+    const saved = (localStorage.getItem(key) || '').trim();
+
+    if (!saved) return;
+
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('join_org_by_code', { p_code: saved });
+      if (error) throw error;
+      localStorage.removeItem(key);
+    } catch (e: any) {
+      setErr(e?.message || 'Não foi possível vincular automaticamente.');
+    } finally {
+      setBusy(false);
+    }
   }, [email]);
 
-  if (status === 'loading') {
+  React.useEffect(() => {
+    stoppedRef.current = false;
+
+    const run = async () => {
+      await tryAutoJoin();
+
+      timerRef.current = setInterval(async () => {
+        if (stoppedRef.current) return;
+
+        setSeconds((s) => {
+          if (s >= 20) {
+            stopPolling();
+            return s;
+          }
+          return s + 1;
+        });
+
+        const ok = await tryRefreshUntilReady();
+        if (ok) {
+          stopPolling();
+        }
+      }, 1000);
+    };
+
+    run();
+
+    return () => {
+      stoppedRef.current = true;
+      stopPolling();
+    };
+  }, [stopPolling, tryAutoJoin, tryRefreshUntilReady]);
+
+  const onRetry = async () => {
+    setRetryClicks((n) => n + 1);
+    setErr(null);
+    setSeconds(0);
+    stopPolling();
+    await tryAutoJoin();
+
+    timerRef.current = setInterval(async () => {
+      setSeconds((s) => {
+        if (s >= 20) {
+          stopPolling();
+          return s;
+        }
+        return s + 1;
+      });
+
+      const ok = await tryRefreshUntilReady();
+      if (ok) {
+        stopPolling();
+      }
+    }, 1000);
+  };
+
+  const joinManual = async () => {
+    setErr(null);
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setErr('Digite o código da organização.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('join_org_by_code', { p_code: trimmed });
+      if (error) throw error;
+      const ok = await tryRefreshUntilReady();
+      if (!ok) {
+        // deixa o polling terminar (ou usuário clicar retry)
+      }
+    } catch (e: any) {
+      setErr(e?.message || 'Código inválido.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (mode === 'auto') {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-black/60 border border-border rounded-2xl p-6 text-gray-200">
-          <div className="text-white text-xl font-semibold">Conectando à organização…</div>
-          <div className="mt-3 text-gray-300 text-sm">
-            Estamos vinculando seu acesso automaticamente. Se demorar, aguarde alguns segundos.
+      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+        <div className="w-full max-w-xl bg-surface border border-border rounded-2xl p-10">
+          <h1 className="text-2xl font-bold text-white">Preparando seu acesso</h1>
+          <p className="text-gray-400 mt-2">
+            Aguarde, estamos vinculando sua conta com sua organização...
+          </p>
+
+          <div className="mt-6 space-y-3 text-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full border border-gold/40 flex items-center justify-center">
+                <div className="w-2.5 h-2.5 rounded-full bg-gold animate-pulse" />
+              </div>
+              <div>
+                <div className="text-gray-200">Preparando o painel</div>
+                <div className="text-gray-500">Aguarde... ({seconds}s)</div>
+              </div>
+            </div>
           </div>
-          <div className="mt-5 flex items-center gap-3">
-            <Loader2 className="animate-spin text-gold" size={18} />
-            <div className="text-sm text-gray-300">Processando…</div>
+
+          {err && (
+            <div className="mt-5 bg-red-500/10 border border-red-500/30 p-3 rounded text-red-200 text-sm">
+              {err}
+            </div>
+          )}
+
+          <div className="mt-6 flex gap-3">
+            <Button onClick={onRetry} variant="secondary" disabled={busy}>
+              Tentar novamente
+            </Button>
+            <Button onClick={() => signOut()} variant="secondary" disabled={busy}>
+              Sair
+            </Button>
+
+            {manualUnlocked && (
+              <Button onClick={() => setMode('manual')} disabled={busy}>
+                Inserir código
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -74,19 +206,37 @@ const ProvisioningGate: React.FC<{ email?: string | null }> = ({ email }) => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-black/60 border border-border rounded-2xl p-6 text-gray-200">
-        <div className="text-white text-xl font-semibold">Acesso ainda não vinculado</div>
-        <div className="mt-3 text-gray-300 text-sm">
-          Não conseguimos vincular automaticamente. Você pode inserir o código manualmente.
-        </div>
-        <div className="mt-5 flex justify-end">
-          <a
-            className="px-4 py-2 rounded-xl border border-border bg-gold text-black font-semibold hover:opacity-90"
-            href="/#/pending"
-          >
-            Inserir código
-          </a>
+    <div className="min-h-screen bg-black flex items-center justify-center p-6">
+      <div className="w-full max-w-lg bg-surface border border-border rounded-2xl p-10">
+        <h1 className="text-2xl font-bold text-white">Inserir código da organização</h1>
+        <p className="text-gray-400 mt-2">
+          Se o vínculo automático não concluiu, insira o código para finalizar.
+        </p>
+
+        <div className="mt-6">
+          <label className="text-sm text-gray-400">Código da organização</label>
+          <input
+            className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+            placeholder="Ex: SQUAD-VSL"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            disabled={busy}
+          />
+
+          {err && (
+            <div className="mt-3 bg-red-500/10 border border-red-500/30 p-3 rounded text-red-200 text-sm">
+              {err}
+            </div>
+          )}
+
+          <div className="mt-4 flex gap-3">
+            <Button onClick={joinManual} disabled={busy}>
+              {busy ? 'Validando...' : 'Finalizar'}
+            </Button>
+            <Button onClick={() => setMode('auto')} variant="secondary" disabled={busy}>
+              Voltar
+            </Button>
+          </div>
         </div>
       </div>
     </div>
