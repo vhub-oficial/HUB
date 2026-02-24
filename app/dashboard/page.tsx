@@ -202,6 +202,7 @@ export const DashboardPage: React.FC = () => {
     () => (folderFromUrl ? String(folderFromUrl) : undefined),
     [folderFromUrl],
   );
+  const isOverview = !type && !isSearching && !activeFolderId;
   const [folderSearch, setFolderSearch] = useState('');
   const effectiveFolderId = useMemo(() => {
     if (activeFolderId) return activeFolderId;
@@ -323,6 +324,11 @@ export const DashboardPage: React.FC = () => {
     return next;
   }, [foldersForCategory, folderSearch, foldersSort]);
 
+  const foldersOverview = useMemo(() => {
+    if (!isOverview) return foldersFiltered;
+    return foldersFiltered.slice(0, 3);
+  }, [isOverview, foldersFiltered]);
+
   const canManageFolders = role === 'admin' || role === 'editor';
 
   const assetsSorted = useMemo(() => {
@@ -334,6 +340,11 @@ export const DashboardPage: React.FC = () => {
     }
     return list;
   }, [scopedAssets, foldersSort]);
+
+  const assetsOverview = useMemo(() => {
+    if (!isOverview) return assetsSorted;
+    return assetsSorted.slice(0, 6);
+  }, [isOverview, assetsSorted]);
 
   useEffect(() => {
     if (!type) return;
@@ -900,7 +911,7 @@ export const DashboardPage: React.FC = () => {
                    {/* ✅ Folder cards: só aparecem na RAIZ (como Drive) */}
                    {!activeFolderId && (
                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                       {foldersFiltered.map((f) => {
+                       {foldersOverview.map((f) => {
                          const isOver = dragOverFolderId === f.id && !!draggingAssetId;
                          return (
                            <div
@@ -1054,7 +1065,7 @@ export const DashboardPage: React.FC = () => {
                    }}
                  >
                     <AssetGrid
-                      assets={assetsSorted}
+                      assets={assetsOverview}
                       selectedIds={selectedIds}
                       selectionMode={selectionMode}
                       onToggleSelect={handleToggleSelect}
@@ -1076,7 +1087,7 @@ export const DashboardPage: React.FC = () => {
                         </button>
                       </div>
                     )}
-                    {scopedAssets.length === 0 && (
+                    {scopedAssets.length === 0 && !isOverview && (
                       <div className="text-gray-500 text-sm mt-3">
                         {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
                       </div>
