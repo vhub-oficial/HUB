@@ -346,6 +346,9 @@ export const DashboardPage: React.FC = () => {
     return assetsSorted.slice(0, 6);
   }, [isOverview, assetsSorted]);
 
+  // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
+  const showAssetFilters = !!type && (scopedAssets?.length ?? 0) > 0;
+
   useEffect(() => {
     if (!type) return;
     setFolderInUrl(undefined);
@@ -767,18 +770,6 @@ export const DashboardPage: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-8">
-                 {type && (
-                   <div data-keep-selection>
-                     <FiltersBar
-                       type={type}
-                       value={filters}
-                       options={options}
-                       onChange={setFilters}
-                       onClear={() => setFilters({ tags: '', meta: {} })}
-                     />
-                   </div>
-                 )}
-
                  {/* ✅ Pastas (Drive-style) */}
                  <div className="mt-6">
                    {/* Top row: breadcrumb (somente quando dentro da pasta) + controles à direita */}
@@ -1036,6 +1027,19 @@ export const DashboardPage: React.FC = () => {
                      </div>
                    )}
                  </div>
+
+                 {/* ✅ Filtros de ASSETS abaixo das pastas (não controla pastas) */}
+                 {showAssetFilters && (
+                   <div className="mt-6" data-keep-selection>
+                     <FiltersBar
+                       type={type!}
+                       value={filters}
+                       options={options}
+                       onChange={setFilters}
+                       onClear={() => setFilters({ tags: '', meta: {} })}
+                     />
+                   </div>
+                 )}
 
                  {/* Asset Grid */}
                  <div
