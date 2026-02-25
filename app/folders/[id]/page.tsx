@@ -116,7 +116,7 @@ export const FolderPage: React.FC = () => {
               className="w-full bg-gold text-black font-semibold rounded-xl py-3 hover:opacity-90 transition mb-6"
               onClick={() => setOpenNew(true)}
             >
-              V•HUB · Novo Asset
+              BH-HUB · Novo Asset
             </button>
             <AssetGrid
               title="Assets nesta pasta"
