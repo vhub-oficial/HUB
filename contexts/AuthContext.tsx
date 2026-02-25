@@ -23,6 +23,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   /** Força uma revalidação do perfil (útil para Pending) */
   refreshProfile: () => Promise<UserProfile | null>;
+  updateProfileLocally: (patch: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -172,6 +173,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return p;
   };
 
+  const updateProfileLocally = (patch: Partial<UserProfile>) => {
+    setProfile((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   const hasRole = (required: Role) => {
     const current = profile?.role;
     if (!current) return false;
@@ -195,6 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUp,
       signOut,
       refreshProfile,
+      updateProfileLocally,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session, profile, loading, isBlocked, needsProvisioning, authError]
