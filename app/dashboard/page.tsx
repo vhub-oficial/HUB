@@ -961,7 +961,7 @@ export const DashboardPage: React.FC = () => {
                              {/* Ações (...) no hover */}
                              <div className="absolute top-3 right-3">
                                <button
-                                 className="w-9 h-9 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                className="w-9 h-9 rounded-lg bg-black/30 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center opacity-100 transition-opacity"
                                  onClick={() => setFolderMenuOpenId((v) => (v === f.id ? null : f.id))}
                                  title="Ações"
                                >
