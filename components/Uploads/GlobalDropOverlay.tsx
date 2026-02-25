@@ -47,8 +47,8 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
     if (!enabled) return;
     if (!isFileDrag(e.dataTransfer)) return;
 
-    const rt = (e.relatedTarget as EventTarget | null) ?? null;
-    if (!rt) {
+    // fecha apenas quando realmente saiu da janela
+    if ((e as any).clientX <= 0 || (e as any).clientY <= 0) {
       closeOverlay();
     }
   }, [enabled, closeOverlay]);
@@ -109,16 +109,52 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
   if (!enabled || !dragging) return null;
 
   return (
-    <div className="fixed inset-0 z-[9998] pointer-events-none">
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
-      <div className="absolute inset-6 rounded-3xl border-2 border-dashed border-gold/50 bg-black/30 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="text-white font-semibold text-lg">Solte para enviar</div>
-          <div className="text-gray-300 text-sm">
-            Destino: <span className="text-white font-medium">{categoryType?.toUpperCase()}</span>
-            {folderId ? <span className="text-gray-400"> • pasta atual</span> : <span className="text-gray-400"> • raiz</span>}
+    <div className="fixed inset-0 z-[9998]">
+      {/* backdrop não interativo */}
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px] pointer-events-none" />
+
+      {/* Área central: dropzone "real" (interativa) */}
+      <div className="absolute inset-0 flex items-center justify-center p-6">
+        <div
+          className="w-full max-w-3xl rounded-3xl border-2 border-dashed border-gold/60 bg-black/40 flex items-center justify-center p-10 shadow-2xl"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeOverlay();
+
+            const files = Array.from((e.dataTransfer?.files ?? []) as any);
+            if (!files.length) return;
+
+            if (!categoryType) {
+              alert('Selecione uma categoria antes de soltar arquivos.');
+              return;
+            }
+
+            enqueueFiles(files, { categoryType, folderId });
+            open();
+          }}
+        >
+          <div className="text-center space-y-3 pointer-events-none">
+            <div className="text-white font-semibold text-2xl">Solte aqui para enviar</div>
+
+            <div className="text-gray-300 text-sm">
+              Destino:{' '}
+              <span className="text-white font-medium">{categoryType?.toUpperCase()}</span>
+              {folderId ? (
+                <span className="text-gray-400"> • pasta atual</span>
+              ) : (
+                <span className="text-gray-400"> • raiz</span>
+              )}
+            </div>
+
+            <div className="text-xs text-gray-400">
+              Dica: você pode arrastar vários arquivos de uma vez.
+            </div>
           </div>
-          <div className="text-xs text-gray-400">Uploads em lote entram em inbox/needs_review para você organizar depois.</div>
         </div>
       </div>
     </div>
