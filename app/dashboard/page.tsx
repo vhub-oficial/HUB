@@ -715,7 +715,7 @@ export const DashboardPage: React.FC = () => {
             Hub Oficial
           </div>
           <h1 className="text-6xl font-black text-white mt-4 tracking-tighter">
-            V<span className="text-gold">•</span>HUB
+            BH<span className="text-gold">•</span>HUB
           </h1>
           <h2 className="text-xl text-gray-300 font-medium mt-2">Central de Inteligência de VSL</h2>
           <p className="text-sm text-gray-500 max-w-lg mt-2 italic">
