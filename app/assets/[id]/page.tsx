@@ -281,11 +281,13 @@ export const AssetDetailPage: React.FC = () => {
                   className="w-full"
                 />
               ) : isVideo || !mime ? (
-                <video
-                  controls
-                  src={previewUrl}
-                  className="w-full rounded-xl"
-                />
+                <div className="w-full flex items-center justify-center">
+                  <video
+                    controls
+                    src={previewUrl}
+                    className="max-h-[70vh] max-w-full w-auto rounded-xl object-contain bg-black/20"
+                  />
+                </div>
               ) : (
                 <div className="text-gray-500">Sem preview</div>
               )
