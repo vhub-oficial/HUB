@@ -299,7 +299,7 @@ export const AssetCard: React.FC<Props> = ({
       onDoubleClick={handleCardDoubleClick}
       onContextMenu={(e) => onContextMenu?.(e, asset.id)}
       className={[
-        'group text-left rounded-xl overflow-hidden bg-surface border transition-colors relative',
+        'group block w-full min-w-0 text-left rounded-xl overflow-hidden bg-surface border transition-colors relative',
         selected ? 'border-gold/70 ring-2 ring-gold/30' : 'border-border hover:border-gold/40',
       ].join(' ')}
       aria-selected={selected ? 'true' : 'false'}
