@@ -67,7 +67,11 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    accept: { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] },
+    accept: {
+      'video/*': ['.mp4', '.mov', '.webm', '.m4v'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp'],
+      'audio/*': ['.mp3', '.wav', '.m4a', '.aac', '.ogg'],
+    },
     disabled: busy || !canUpload,
   });
 
@@ -83,7 +87,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
       </div>
 
       <p className="text-gray-400 text-sm mt-2">
-        Arraste e solte vídeos. Tags obrigatórias (separe por vírgula).
+        Arraste e solte imagens, áudios ou vídeos. Tags obrigatórias (separe por vírgula).
       </p>
 
       <div className="mt-4">
@@ -107,7 +111,7 @@ export const UploadDropzone: React.FC<Props> = ({ folderId = null, categoryType,
       >
         <input {...getInputProps()} />
         <div className="text-white font-medium">
-          {isDragActive ? 'Solte o vídeo aqui…' : 'Arraste e solte aqui'}
+          {isDragActive ? 'Solte o arquivo aqui…' : 'Arraste e solte aqui'}
         </div>
         <div className="text-gray-400 text-sm mt-1">
           ou clique para escolher um arquivo

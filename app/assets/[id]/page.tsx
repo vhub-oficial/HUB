@@ -177,6 +177,10 @@ export const AssetDetailPage: React.FC = () => {
   const external = isExternal(asset);
   const type = (asset?.type ?? '').toLowerCase();
   const metaFields = getCategoryMetaFields(type);
+  const mime = (asset?.meta?.mime_type ?? '').toLowerCase();
+  const isImage = mime.startsWith('image/');
+  const isAudio = mime.startsWith('audio/');
+  const isVideo = mime.startsWith('video/');
 
   const getMeta = (k: string) => (asset?.meta && typeof asset.meta === 'object' ? (asset.meta as any)[k] : undefined);
 
@@ -264,13 +268,27 @@ export const AssetDetailPage: React.FC = () => {
                 </a>
               )
             ) : previewUrl ? (
-              <div className="w-full flex items-center justify-center">
-                <video
+              isImage ? (
+                <img
                   src={previewUrl}
-                  controls
-                  className="rounded-2xl max-h-[70vh] max-w-full w-auto object-contain"
+                  alt={asset?.name ?? 'Imagem'}
+                  className="w-full h-auto max-h-[70vh] object-contain rounded-xl bg-black/20"
                 />
-              </div>
+              ) : isAudio ? (
+                <audio
+                  controls
+                  src={previewUrl}
+                  className="w-full"
+                />
+              ) : isVideo || !mime ? (
+                <video
+                  controls
+                  src={previewUrl}
+                  className="w-full rounded-xl"
+                />
+              ) : (
+                <div className="text-gray-500">Sem preview</div>
+              )
             ) : (
               <div className="text-gray-500">Sem preview</div>
             )}
