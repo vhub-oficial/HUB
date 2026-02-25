@@ -72,8 +72,11 @@ const buildDownloadName = (asset: AssetRow) => {
 };
 
 const MediaFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="w-full aspect-video overflow-hidden rounded-xl bg-black/25 border border-white/5">
-    <div className="w-full h-full">{children}</div>
+  <div
+    className="w-full overflow-hidden rounded-xl bg-black/25 border border-white/5 relative"
+    style={{ aspectRatio: '16 / 9' }}
+  >
+    <div className="absolute inset-0">{children}</div>
   </div>
 );
 
