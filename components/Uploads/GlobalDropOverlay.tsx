@@ -1,6 +1,22 @@
 import React from 'react';
 import { useUploadQueue } from '../../contexts/UploadQueueContext';
 
+const isFileDrag = (dt: DataTransfer | null | undefined) => {
+  if (!dt) return false;
+
+  const types = Array.from(dt.types || []);
+  if (types.includes('Files')) return true;
+
+  const items = (dt as any).items as DataTransferItemList | undefined;
+  if (items && items.length) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i]?.kind === 'file') return true;
+    }
+  }
+
+  return false;
+};
+
 type Props = {
   categoryType: string | null; // vem do dashboard (type)
   folderId: string | null;     // vem do dashboard (activeFolderId)
@@ -14,19 +30,22 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
 
   const onDragEnter = React.useCallback((e: DragEvent) => {
     if (!enabled) return;
-    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
-      setDragging(true);
-    }
+    if (!isFileDrag(e.dataTransfer)) return;
+
+    setDragging(true);
   }, [enabled]);
 
   const onDragOver = React.useCallback((e: DragEvent) => {
     if (!enabled) return;
+    if (!isFileDrag(e.dataTransfer)) return;
+
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   }, [enabled]);
 
   const onDragLeave = React.useCallback((e: DragEvent) => {
     if (!enabled) return;
+    if (!isFileDrag(e.dataTransfer)) return;
 
     const rt = (e.relatedTarget as EventTarget | null) ?? null;
     if (!rt) {
@@ -36,6 +55,7 @@ export function GlobalDropOverlay({ categoryType, folderId, enabled = true }: Pr
 
   const onDrop = React.useCallback((e: DragEvent) => {
     if (!enabled) return;
+    if (!isFileDrag(e.dataTransfer)) return;
 
     e.preventDefault();
     e.stopPropagation();
