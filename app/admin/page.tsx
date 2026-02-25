@@ -17,30 +17,102 @@ export const AdminPage: React.FC = () => {
   const [editOrgName, setEditOrgName] = useState('');
   const [editJoin, setEditJoin] = useState('');
 
+  const [usersTab, setUsersTab] = useState<'active' | 'blocked'>('active');
+  const [usersQuery, setUsersQuery] = useState<string>('');
+  const [usersPage, setUsersPage] = useState<number>(1);
+  const usersPageSize = 25;
+  const [usersTotal, setUsersTotal] = useState<number>(0);
+  const [usersTotalActive, setUsersTotalActive] = useState<number>(0);
+  const [usersTotalBlocked, setUsersTotalBlocked] = useState<number>(0);
+  const [usersLoading, setUsersLoading] = useState<boolean>(false);
+
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       if (!organizationId) return;
       setJoinBusy(true);
       try {
-        const [{ data: orgData }, { data: usageData }, { data: usersData }] = await Promise.all([
+        const [{ data: orgData }, { data: usageData }] = await Promise.all([
           supabase.from('organizations').select('id,name,plan,storage_limit_gb,join_code').eq('id', organizationId).single(),
           supabase.from('storage_usage').select('used_space_gb,last_updated').eq('organization_id', organizationId).single(),
-          supabase.from('users').select('id,email,name,role,disabled,created_at').eq('organization_id', organizationId).order('created_at', { ascending: true }),
         ]);
         if (!mounted) return;
         setOrg(orgData ?? null);
         setUsage(usageData ?? null);
-        setUsers(usersData ?? []);
         setJoinCode((orgData as any)?.join_code ?? null);
         setEditOrgName((orgData as any)?.name ?? '');
         setEditJoin((orgData as any)?.join_code ?? '');
+      } catch (e: any) {
+        if (mounted) setErr(e?.message ?? 'Falha ao carregar dados do admin');
       } finally {
         if (mounted) setJoinBusy(false);
       }
     })();
     return () => { mounted = false; };
   }, [organizationId]);
+
+  const fetchUserCounts = React.useCallback(async () => {
+    if (!organizationId) return;
+    const [{ count: cActive }, { count: cBlocked }] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('disabled', false),
+      supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('disabled', true),
+    ]);
+    setUsersTotalActive(cActive ?? 0);
+    setUsersTotalBlocked(cBlocked ?? 0);
+  }, [organizationId]);
+
+  const fetchUsers = React.useCallback(async () => {
+    if (!organizationId) return;
+    setUsersLoading(true);
+    setErr(null);
+    try {
+      const from = (usersPage - 1) * usersPageSize;
+      const to = from + usersPageSize - 1;
+      const isBlocked = usersTab === 'blocked';
+      const search = usersQuery.trim();
+
+      let q = supabase
+        .from('users')
+        .select('id,email,name,role,disabled,created_at', { count: 'exact' })
+        .eq('organization_id', organizationId)
+        .eq('disabled', isBlocked)
+        .order('created_at', { ascending: true })
+        .range(from, to);
+
+      if (search) {
+        q = q.or(`email.ilike.%${search}%,name.ilike.%${search}%`);
+      }
+
+      const { data, error, count } = await q;
+      if (error) throw error;
+      setUsers(data ?? []);
+      setUsersTotal(count ?? 0);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Falha ao carregar usuários');
+      setUsers([]);
+      setUsersTotal(0);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [organizationId, usersTab, usersQuery, usersPage]);
+
+  React.useEffect(() => {
+    if (!organizationId) return;
+    fetchUserCounts();
+  }, [organizationId, fetchUserCounts]);
+
+  React.useEffect(() => {
+    if (!organizationId) return;
+    fetchUsers();
+  }, [organizationId, fetchUsers]);
 
   const copyJoin = async () => {
     if (!joinCode) return;
@@ -103,9 +175,8 @@ export const AdminPage: React.FC = () => {
 
       if (error) throw error;
 
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, disabled: nextDisabled } : u))
-      );
+      await fetchUserCounts();
+      await fetchUsers();
     } catch (e: any) {
       alert(e?.message ?? 'Falha ao atualizar acesso do usuário');
     } finally {
@@ -195,10 +266,90 @@ export const AdminPage: React.FC = () => {
         </div>
 
         <div className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-white font-semibold">Usuários</h2>
-          <p className="text-gray-400 text-sm mt-1">
-            Gerencie membros e roles (admin, editor, viewer).
-          </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-white font-semibold">Usuários</h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Gerencie membros e roles (admin, editor, viewer).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={[
+                  'px-3 py-2 rounded-xl border text-sm transition-colors',
+                  usersTab === 'active'
+                    ? 'bg-white/10 text-white border-white/15'
+                    : 'bg-black/30 text-gray-300 border-white/10 hover:bg-white/5',
+                ].join(' ')}
+                onClick={() => {
+                  setUsersTab('active');
+                  setUsersPage(1);
+                }}
+                disabled={usersLoading || busy}
+              >
+                Ativos ({usersTotalActive})
+              </button>
+              <button
+                type="button"
+                className={[
+                  'px-3 py-2 rounded-xl border text-sm transition-colors',
+                  usersTab === 'blocked'
+                    ? 'bg-white/10 text-white border-white/15'
+                    : 'bg-black/30 text-gray-300 border-white/10 hover:bg-white/5',
+                ].join(' ')}
+                onClick={() => {
+                  setUsersTab('blocked');
+                  setUsersPage(1);
+                }}
+                disabled={usersLoading || busy}
+              >
+                Bloqueados ({usersTotalBlocked})
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+            <input
+              className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white w-80 max-w-full"
+              placeholder="Buscar por nome ou e-mail..."
+              value={usersQuery}
+              onChange={(e) => {
+                setUsersQuery(e.target.value);
+                setUsersPage(1);
+              }}
+              disabled={usersLoading || busy}
+            />
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border border-border bg-black/30 text-white hover:border-gold/40 disabled:opacity-50"
+                disabled={usersLoading || busy || usersPage <= 1}
+                onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </button>
+              <div className="text-sm text-gray-300">
+                Página <span className="text-white font-semibold">{usersPage}</span>
+                {usersTotal > 0 ? (
+                  <>
+                    {' '}
+                    • <span className="text-gray-400">{usersTotal}</span> no total
+                  </>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border border-border bg-black/30 text-white hover:border-gold/40 disabled:opacity-50"
+                disabled={usersLoading || busy || usersPage * usersPageSize >= usersTotal}
+                onClick={() => setUsersPage((p) => p + 1)}
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
 
           {err && (
             <div className="mt-3 bg-red-500/10 border border-red-500/30 p-3 rounded text-red-300 text-sm">
@@ -217,6 +368,13 @@ export const AdminPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
+                {usersLoading && (
+                  <tr className="border-t border-border">
+                    <td className="p-3 text-gray-400" colSpan={4}>
+                      Carregando usuários...
+                    </td>
+                  </tr>
+                )}
                 {users.map((u) => (
                   <tr key={u.id} className="border-t border-border">
                     <td className="p-3 text-white">{u.name ?? '—'}</td>
@@ -225,7 +383,7 @@ export const AdminPage: React.FC = () => {
                       <select
                         className="bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
                         value={u.role ?? 'viewer'}
-                        disabled={busy}
+                        disabled={busy || usersLoading}
                         onChange={(e) => updateRole(u.id, e.target.value as any)}
                       >
                         {roles.map((r) => (
@@ -238,7 +396,7 @@ export const AdminPage: React.FC = () => {
                         className={`px-3 py-2 rounded-lg border ${
                           u.disabled ? 'border-yellow-500 text-yellow-300' : 'border-red-500 text-red-300'
                         }`}
-                        disabled={busy}
+                        disabled={busy || usersLoading}
                         onClick={() => setUserDisabled(u.id, !u.disabled)}
                       >
                         {u.disabled ? 'Reativar' : 'Bloquear'}
@@ -247,9 +405,13 @@ export const AdminPage: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-                {users.length === 0 && (
+                {!usersLoading && users.length === 0 && (
                   <tr className="border-t border-border">
-                    <td className="p-3 text-gray-500" colSpan={4}>Nenhum usuário encontrado.</td>
+                    <td className="p-3 text-gray-500" colSpan={4}>
+                      {usersTab === 'blocked'
+                        ? 'Nenhum usuário bloqueado encontrado.'
+                        : 'Nenhum usuário ativo encontrado.'}
+                    </td>
                   </tr>
                 )}
               </tbody>
