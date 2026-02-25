@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetRow } from '../../hooks/useAssets';
-import { Play, Link as LinkIcon, Pencil, Trash2, Download } from 'lucide-react';
+import { Play, Link as LinkIcon, AudioLines, Pencil, Trash2, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSignedUrl, getOrgBucketName } from '../../lib/storageHelpers';
 import { useAssets } from '../../hooks/useAssets';
@@ -375,6 +375,7 @@ export const AssetCard: React.FC<Props> = ({
           ) : isAudio(asset) ? (
             <div className="w-full h-full flex items-center justify-center text-gray-300">
               <div className="text-center">
+                <AudioLines className="mx-auto mb-2 text-gray-400" size={28} />
                 <div className="text-sm font-semibold">Áudio</div>
                 <div className="text-xs text-gray-500 mt-1">Sem thumbnail</div>
               </div>
