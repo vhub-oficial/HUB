@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBar';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
+import { getCategoryMetaFields } from '../../lib/categoryMeta';
 import { normalizeCategoryType } from '../../lib/categoryType';
 
 export const DashboardPage: React.FC = () => {
@@ -231,6 +232,11 @@ export const DashboardPage: React.FC = () => {
   const [ctxMenu, setCtxMenu] = React.useState<null | { x: number; y: number }>(null);
   const [gridDensity, setGridDensity] = React.useState<'compact' | 'default' | 'large'>('default');
   const [gridMenuOpen, setGridMenuOpen] = React.useState(false);
+  const [bulkOpen, setBulkOpen] = React.useState(false);
+  const [bulkFieldKey, setBulkFieldKey] = React.useState<string>('');
+  const [bulkValue, setBulkValue] = React.useState<string>('');
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
   const closeCtxMenu = React.useCallback(() => setCtxMenu(null), []);
 
   React.useEffect(() => {
@@ -283,6 +289,7 @@ export const DashboardPage: React.FC = () => {
     hasMore,
     loadMore,
     refresh,
+    updateAsset,
     moveAssetToFolder,
     deleteAsset,
   } = useAssets(assetsArgs);
@@ -330,7 +337,12 @@ export const DashboardPage: React.FC = () => {
     [location.pathname, location.search, navigate]
   );
 
-  const normalizedType = useMemo(() => normalizeCategoryType(type ?? null), [type]);
+  const normalizedType = React.useMemo(() => normalizeCategoryType(type), [type]);
+
+  const bulkMetaFields = React.useMemo(() => {
+    if (!normalizedType) return [];
+    return getCategoryMetaFields(normalizedType);
+  }, [normalizedType]);
 
   const foldersForCategory = useMemo(() => {
     const base = folders.filter((f) => !f.parent_id);
@@ -366,6 +378,14 @@ export const DashboardPage: React.FC = () => {
     if (!isOverview) return assetsSorted;
     return assetsSorted.slice(0, 6);
   }, [isOverview, assetsSorted]);
+
+  const selectedCount = selectedIds.size;
+
+  const visibleAssetsById = React.useMemo(() => {
+    const m = new Map<string, any>();
+    for (const a of assetsOverview ?? []) m.set(a.id, a);
+    return m;
+  }, [assetsOverview]);
 
   // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
   const showAssetFilters = !!type && (scopedAssets?.length ?? 0) > 0;
@@ -643,6 +663,46 @@ export const DashboardPage: React.FC = () => {
       await deleteAsset(asset);
     }
   };
+
+
+  const applyBulkMeta = React.useCallback(async () => {
+    if (!normalizedType) return;
+    if (!bulkFieldKey) {
+      setBulkMsg('Selecione um campo.');
+      return;
+    }
+    if (!bulkValue) {
+      setBulkMsg('Selecione um valor.');
+      return;
+    }
+    if (selectedIds.size === 0) return;
+
+    setBulkBusy(true);
+    setBulkMsg(null);
+
+    try {
+      const ids = Array.from(selectedIds);
+
+      for (const id of ids) {
+        const asset = visibleAssetsById.get(id);
+        if (!asset) continue;
+
+        const nextMeta = { ...(asset.meta ?? {}), [bulkFieldKey]: bulkValue };
+
+        // eslint-disable-next-line no-await-in-loop
+        await updateAsset(id, { meta: nextMeta });
+      }
+
+      await refresh();
+
+      setBulkMsg(`Metadado aplicado a ${ids.length} asset(s).`);
+      setBulkOpen(false);
+    } catch (e: any) {
+      setBulkMsg(e?.message ?? 'Falha ao aplicar metadado em massa.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [normalizedType, bulkFieldKey, bulkValue, selectedIds, visibleAssetsById, updateAsset, refresh]);
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -1106,6 +1166,42 @@ export const DashboardPage: React.FC = () => {
                       onItemContextMenu={openSelectionContextMenu}
                       density={gridDensity}
                     />
+                    {type && selectedCount > 0 && (
+                      <div className="sticky bottom-4 mt-4 z-20 flex justify-center">
+                        <div className="w-full max-w-3xl rounded-2xl border border-border bg-black/80 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="text-sm text-gray-200">
+                            <span className="font-semibold text-white">{selectedCount}</span> selecionado(s)
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:border-gold/40 transition-colors"
+                              onClick={() => {
+                                setBulkMsg(null);
+                                const first = bulkMetaFields?.[0]?.key ?? '';
+                                setBulkFieldKey(first);
+                                setBulkValue('');
+                                setBulkOpen(true);
+                              }}
+                            >
+                              Aplicar metadado
+                            </button>
+
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 transition-colors"
+                              onClick={() => {
+                                setSelectedIds(new Set());
+                                setAnchorIndex(null);
+                              }}
+                            >
+                              Limpar seleção
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {hasMore && (
                       <div className="mt-6 flex justify-center">
                         <button
@@ -1213,6 +1309,98 @@ export const DashboardPage: React.FC = () => {
           >
             Limpar seleção
           </button>
+        </div>
+      )}
+
+      {bulkOpen && type && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-6">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-white font-semibold text-lg">Aplicar metadado</div>
+                <div className="text-sm text-gray-400 mt-1">
+                  Aplicar em <span className="text-white font-medium">{selectedCount}</span> asset(s) desta categoria.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="w-9 h-9 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40"
+                onClick={() => setBulkOpen(false)}
+                disabled={bulkBusy}
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <div className="text-xs text-gray-500">Campo</div>
+                <select
+                  className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                  value={bulkFieldKey}
+                  onChange={(e) => {
+                    setBulkFieldKey(e.target.value);
+                    setBulkValue('');
+                    setBulkMsg(null);
+                  }}
+                  disabled={bulkBusy}
+                >
+                  {bulkMetaFields.length === 0 && <option value="">Sem campos configurados</option>}
+                  {bulkMetaFields.map((f: any) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-xs text-gray-500">Valor</div>
+                <select
+                  className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                  value={bulkValue}
+                  onChange={(e) => {
+                    setBulkValue(e.target.value);
+                    setBulkMsg(null);
+                  }}
+                  disabled={bulkBusy || !bulkFieldKey}
+                >
+                  <option value="">Selecione…</option>
+                  {(options?.meta?.[bulkFieldKey] ?? []).map((o: string) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {bulkMsg && (
+                <div className="text-sm text-gray-300 border border-white/10 bg-black/30 rounded-xl p-3">
+                  {bulkMsg}
+                </div>
+              )}
+
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40"
+                  onClick={() => setBulkOpen(false)}
+                  disabled={bulkBusy}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl bg-gold text-black font-semibold hover:opacity-90 disabled:opacity-60"
+                  onClick={applyBulkMeta}
+                  disabled={bulkBusy || !bulkFieldKey || !bulkValue || selectedCount === 0}
+                >
+                  {bulkBusy ? 'Aplicando…' : 'Aplicar'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
