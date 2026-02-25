@@ -187,7 +187,7 @@ export const LoginPage: React.FC = () => {
 
       <div className="w-full max-w-md bg-surface border border-border p-8 rounded-xl shadow-2xl relative z-10 animate-fade-in">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">V•HUB</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">BH-HUB</h1>
           <p className="text-gray-400">
             {isForgot ? 'Receba um link para redefinir sua senha.' : isRegistering ? 'Crie sua conta para começar.' : 'Acesse sua conta para continuar.'}
           </p>

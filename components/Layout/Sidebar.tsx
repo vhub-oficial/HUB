@@ -67,7 +67,7 @@ export const Sidebar: React.FC = () => {
     <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen fixed left-0 top-0">
       <div className="p-6">
         <h1 className="text-xl font-bold text-white tracking-tight flex items-center">
-          <span className="text-gold mr-2">✦</span> V•HUB
+          <span className="text-gold mr-2">✦</span> BH-HUB
         </h1>
       </div>
 
