@@ -162,7 +162,7 @@ export const AssetGrid: React.FC<Props> = ({
 
       <div className={gridClass}>
         {assets.map((asset) => (
-          <div key={asset.id} ref={setItemRef(asset.id)} data-asset-card>
+          <div key={asset.id} ref={setItemRef(asset.id)} data-asset-card className="w-full">
             <AssetCard
               asset={asset}
               onDeleted={onDeleted}
