@@ -233,6 +233,27 @@ export const DashboardPage: React.FC = () => {
   const [gridMenuOpen, setGridMenuOpen] = React.useState(false);
   const closeCtxMenu = React.useCallback(() => setCtxMenu(null), []);
 
+  React.useEffect(() => {
+    const clear = () => {
+      setDraggingAssetId(null);
+      setDragOverFolderId(null);
+    };
+
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clear();
+    };
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
   const selectionMode = selectedIds.size > 0;
 
   const folderSortForHook = foldersSort === 'recent' ? 'recent' : 'name';
@@ -913,10 +934,14 @@ export const DashboardPage: React.FC = () => {
                                isOver ? 'border-gold/60 ring-2 ring-gold/20 scale-[1.01]' : '',
                              ].join(' ')}
                              onDragOver={(e) => {
-                               if (draggingAssetId) e.preventDefault();
+                               // Permite drop sempre (validação real acontece no onDrop via getDraggedAssetIds)
+                               e.preventDefault();
+                               e.dataTransfer.dropEffect = 'move';
                              }}
-                             onDragEnter={() => {
-                               if (draggingAssetId) setDragOverFolderId(f.id);
+                             onDragEnter={(e) => {
+                               // Só marca hover visual quando o drag carrega ids válidos
+                               const ids = getDraggedAssetIds(e as any);
+                               if (ids.length) setDragOverFolderId(f.id);
                              }}
                              onDragLeave={() => {
                                if (dragOverFolderId === f.id) setDragOverFolderId(null);
@@ -1061,7 +1086,9 @@ export const DashboardPage: React.FC = () => {
                      setAnchorIndex(null);
                    }}
                    onDragOver={(e) => {
-                     if (activeFolderId && draggingAssetId) e.preventDefault();
+                     if (!activeFolderId) return;
+                     e.preventDefault();
+                     e.dataTransfer.dropEffect = 'move';
                    }}
                    onDrop={async (e) => {
                      if (!activeFolderId) return;
