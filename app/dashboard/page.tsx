@@ -344,6 +344,13 @@ export const DashboardPage: React.FC = () => {
     return getCategoryMetaFields(normalizedType);
   }, [normalizedType]);
 
+  const bulkValueOptions = React.useMemo(() => {
+    if (!bulkFieldKey) return [];
+    const arr = (options?.meta?.[bulkFieldKey] ?? []) as any[];
+    // normaliza pra string (caso venha algo diferente)
+    return arr.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean);
+  }, [options, bulkFieldKey]);
+
   const foldersForCategory = useMemo(() => {
     const base = folders.filter((f) => !f.parent_id);
     if (!normalizedType) return base;
@@ -689,14 +696,25 @@ export const DashboardPage: React.FC = () => {
 
         const nextMeta = { ...(asset.meta ?? {}), [bulkFieldKey]: bulkValue };
 
+        // ✅ PATCH COMPLETO (evita sobrescrever name/tags/url com undefined)
+        const nextPatch: any = {
+          name: asset.name,
+          tags: asset.tags ?? [],
+          meta: nextMeta,
+        };
+
+        // manter url se existir (principalmente externos)
+        if (asset.url != null) nextPatch.url = asset.url;
+
         // eslint-disable-next-line no-await-in-loop
-        await updateAsset(id, { meta: nextMeta });
+        await updateAsset(id, nextPatch);
       }
 
       await refresh();
 
       setBulkMsg(`Metadado aplicado a ${ids.length} asset(s).`);
-      setBulkOpen(false);
+      // mantém aberto pra feedback (melhor UX)
+      // setBulkOpen(false);
     } catch (e: any) {
       setBulkMsg(e?.message ?? 'Falha ao aplicar metadado em massa.');
     } finally {
@@ -1182,6 +1200,9 @@ export const DashboardPage: React.FC = () => {
                                 const first = bulkMetaFields?.[0]?.key ?? '';
                                 setBulkFieldKey(first);
                                 setBulkValue('');
+                                // se já tiver opções, pré-seleciona a primeira (ajuda UX)
+                                const firstOpts = (options?.meta?.[first] ?? []) as any[];
+                                if (first && firstOpts.length > 0) setBulkValue(String(firstOpts[0]));
                                 setBulkOpen(true);
                               }}
                             >
@@ -1357,22 +1378,41 @@ export const DashboardPage: React.FC = () => {
 
               <div>
                 <div className="text-xs text-gray-500">Valor</div>
-                <select
-                  className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                  value={bulkValue}
-                  onChange={(e) => {
-                    setBulkValue(e.target.value);
-                    setBulkMsg(null);
-                  }}
-                  disabled={bulkBusy || !bulkFieldKey}
-                >
-                  <option value="">Selecione…</option>
-                  {(options?.meta?.[bulkFieldKey] ?? []).map((o: string) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+
+                {bulkValueOptions.length > 0 ? (
+                  <select
+                    className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                    value={bulkValue}
+                    onChange={(e) => {
+                      setBulkValue(e.target.value);
+                      setBulkMsg(null);
+                    }}
+                    disabled={bulkBusy || !bulkFieldKey}
+                  >
+                    <option value="">Selecione…</option>
+                    {bulkValueOptions.map((o: string) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <>
+                    <input
+                      className="mt-1 w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                      placeholder="Digite um valor (não há opções carregadas)"
+                      value={bulkValue}
+                      onChange={(e) => {
+                        setBulkValue(e.target.value);
+                        setBulkMsg(null);
+                      }}
+                      disabled={bulkBusy || !bulkFieldKey}
+                    />
+                    <div className="mt-2 text-xs text-gray-500">
+                      Nenhuma opção encontrada para este campo — você pode digitar manualmente.
+                    </div>
+                  </>
+                )}
               </div>
 
               {bulkMsg && (
