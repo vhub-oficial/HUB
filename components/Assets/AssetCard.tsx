@@ -71,6 +71,12 @@ const buildDownloadName = (asset: AssetRow) => {
   return `${base}${ext}`;
 };
 
+const MediaFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="w-full aspect-video overflow-hidden rounded-xl bg-black/25 border border-white/5">
+    <div className="w-full h-full">{children}</div>
+  </div>
+);
+
 export const AssetCard: React.FC<Props> = ({
   asset,
   onDeleted,
@@ -346,50 +352,40 @@ export const AssetCard: React.FC<Props> = ({
         )}
       </div>
 
-      <div className="relative aspect-video bg-black/60 overflow-hidden">
-        {isExternal(asset) && src ? (
-          <img
-            src={src}
-            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-            alt={asset.name}
-            loading="lazy"
-          />
-        ) : !isExternal(asset) && src ? (
-          <img
-            src={src}
-            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-            alt={asset.name}
-            loading="lazy"
-          />
-        ) : isExternal(asset) ? (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-2">
-            <div className="flex items-center gap-2">
-              <LinkIcon size={16} />
-              <span className="text-sm">Link externo</span>
+      <div className="relative">
+        <MediaFrame>
+          {src ? (
+            <img
+              src={src}
+              alt={asset.name ?? 'Preview'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              draggable={false}
+            />
+          ) : external ? (
+            <div className="w-full h-full flex items-center justify-center text-gray-300">
+              <div className="text-center">
+                <div className="text-sm font-semibold">Link externo</div>
+                <div className="text-xs text-gray-500 mt-1">Sem thumbnail</div>
+              </div>
             </div>
-            <span className="text-xs text-gray-600">Abra para acessar</span>
-          </div>
-        ) : isAudio(asset) ? (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2 opacity-80">
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M4 10v4M7 8v8M10 5v14M13 8v8M16 10v4M19 7v10"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="text-xs text-gray-400">Áudio</div>
+          ) : isAudio(asset) ? (
+            <div className="w-full h-full flex items-center justify-center text-gray-300">
+              <div className="text-center">
+                <div className="text-sm font-semibold">Áudio</div>
+                <div className="text-xs text-gray-500 mt-1">Sem thumbnail</div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">Sem preview</div>
-        )}
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400">
+              <div className="text-xs">Sem preview</div>
+            </div>
+          )}
+        </MediaFrame>
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center">
-            {isExternal(asset) ? <LinkIcon className="text-gold" size={22} /> : <Play className="text-gold" size={22} />}
+            {external ? <LinkIcon className="text-gold" size={22} /> : <Play className="text-gold" size={22} />}
           </div>
         </div>
       </div>
