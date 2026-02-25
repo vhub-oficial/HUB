@@ -3,9 +3,10 @@ import { normalizeCategoryType } from './categoryType';
 export type MetaFieldDef = {
   key: string;
   label: string;
+  allLabel?: string; // label do placeholder "Todos/Todas ..." (PT correto)
 };
 
-const F = (key: string, label: string): MetaFieldDef => ({ key, label });
+const F = (key: string, label: string, allLabel?: string): MetaFieldDef => ({ key, label, allLabel });
 
 /**
  * ✅ Fonte ÚNICA da verdade dos campos meta por categoria.
@@ -13,26 +14,48 @@ const F = (key: string, label: string): MetaFieldDef => ({ key, label });
  * deepfake, voz-clonada, tiktok, musica, sfx, veo3, prova-social, ugc
  */
 export const CATEGORY_META_FIELDS: Record<string, MetaFieldDef[]> = {
-  deepfake: [F('personagem', 'Personagem'), F('versao', 'Versão')],
-
-  'voz-clonada': [F('personagem', 'Personagem'), F('versao', 'Versão'), F('genero', 'Gênero')],
-
-  tiktok: [
-    F('produto', 'Produto'),
-    F('nicho', 'Nicho'),
-    F('tipo', 'Tipo'),
-    F('momento_vsl', 'Momento da VSL'),
+  deepfake: [
+    F('personagem', 'Personagem', 'Todos os Personagens'),
+    F('versao', 'Versão', 'Todas as Versões'),
   ],
 
-  musica: [F('momento_vsl', 'Momentos da VSL'), F('emocao', 'Emoções')],
+  'voz-clonada': [
+    F('personagem', 'Personagem', 'Todos os Personagens'),
+    F('versao', 'Versão', 'Todas as Versões'),
+    F('genero', 'Gênero', 'Todos os Gêneros'),
+  ],
 
-  sfx: [F('momento_vsl', 'Momentos da VSL'), F('emocao', 'Emoções')],
+  tiktok: [
+    F('produto', 'Produto', 'Todos os Produtos'),
+    F('nicho', 'Nicho', 'Todos os Nichos'),
+    F('tipo', 'Tipo', 'Todos os Tipos'),
+    F('momento_vsl', 'Momento da VSL', 'Todos os Momentos da VSL'),
+  ],
 
-  veo3: [F('produto', 'Produto'), F('dimensao', 'Dimensão')],
+  musica: [
+    F('momento_vsl', 'Momentos da VSL', 'Todos os Momentos da VSL'),
+    F('emocao', 'Emoções', 'Todas as Emoções'),
+  ],
 
-  'prova-social': [F('nicho', 'Nichos'), F('genero', 'Gêneros')],
+  sfx: [
+    F('momento_vsl', 'Momentos da VSL', 'Todos os Momentos da VSL'),
+    F('emocao', 'Emoções', 'Todas as Emoções'),
+  ],
 
-  ugc: [F('genero', 'Gêneros'), F('faixa_etaria', 'Idades')],
+  veo3: [
+    F('produto', 'Produto', 'Todos os Produtos'),
+    F('dimensao', 'Dimensão', 'Todas as Dimensões'),
+  ],
+
+  'prova-social': [
+    F('nicho', 'Nichos', 'Todos os Nichos'),
+    F('genero', 'Gêneros', 'Todos os Gêneros'),
+  ],
+
+  ugc: [
+    F('genero', 'Gêneros', 'Todos os Gêneros'),
+    F('faixa_etaria', 'Idades', 'Todas as Idades'),
+  ],
 };
 
 /**

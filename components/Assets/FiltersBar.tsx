@@ -39,7 +39,7 @@ export const FiltersBar: React.FC<Props> = ({ type, value, options, onChange, on
               onChange({ ...value, meta: next });
             }}
           >
-            <option value="">{`Todos os ${f.label}`}</option>
+            <option value="">{f.allLabel ?? `Todos os ${f.label}`}</option>
             {opts.map((o) => (
               <option key={o} value={o}>
                 {o}
