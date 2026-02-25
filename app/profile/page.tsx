@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/UI/Button';
 
 export const ProfilePage: React.FC = () => {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, updateProfileLocally } = useAuth();
 
   const [orgName, setOrgName] = React.useState<string | null>(null);
   const [name, setName] = React.useState(profile?.name ?? '');
@@ -31,6 +31,7 @@ export const ProfilePage: React.FC = () => {
 
   const save = async () => {
     if (!user?.id) return;
+
     setBusy(true);
     setMsg(null);
 
@@ -44,6 +45,8 @@ export const ProfilePage: React.FC = () => {
     if (error) {
       setMsg(error.message);
     } else {
+      // 🔥 Atualiza contexto imediatamente
+      updateProfileLocally({ name });
       setMsg('Nome atualizado com sucesso.');
     }
   };
