@@ -874,7 +874,6 @@ export const DashboardPage: React.FC = () => {
   const [stats, setStats] = useState([
     { label: 'Deepfakes', count: 0, icon: Users, type: 'deepfakes' },
     { label: 'Voz para Clonar', count: 0, icon: Mic, type: 'vozes' },
-    { label: 'Vídeos Originais', count: 0, icon: Video, type: 'original' },
     { label: 'Tik Tok', count: 0, icon: Smartphone, type: 'tiktok' },
     { label: 'Músicas', count: 0, icon: Music, type: 'musicas' },
     { label: 'SFX', count: 0, icon: Speaker, type: 'sfx' },
