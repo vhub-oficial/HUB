@@ -239,6 +239,7 @@ export const DashboardPage: React.FC = () => {
   const [bulkFieldKey, setBulkFieldKey] = React.useState<string>('');
   const [bulkValue, setBulkValue] = React.useState<string>('');
   const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkActionBusy, setBulkActionBusy] = React.useState(false);
   const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
   const closeCtxMenu = React.useCallback(() => setCtxMenu(null), []);
 
@@ -403,6 +404,7 @@ export const DashboardPage: React.FC = () => {
   }, [isOverview, assetsSorted]);
 
   const selectedCount = selectedIds.size;
+  const actionDisabled = bulkActionBusy || bulkBusy || isBusyMove;
 
   // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
   const showAssetFilters = !!type && (scopedAssets?.length ?? 0) > 0;
@@ -745,6 +747,79 @@ export const DashboardPage: React.FC = () => {
       setBulkBusy(false);
     }
   }, [bulkFieldKey, bulkMode, bulkTagMode, bulkValue, refresh, scopedAssets, selectedIds, showToast, updateAsset]);
+
+  const bulkDownloadSelected = React.useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    try {
+      setBulkActionBusy(true);
+
+      const ids = Array.from(selectedIds);
+      const byId = new Map<string, any>();
+      for (const a of scopedAssets ?? []) byId.set(a.id, a);
+
+      // MVP: abre downloads em novas abas (pode ser bloqueado se forem muitos)
+      // Para 5-20 itens funciona bem; para muitos, futuramente fazemos ZIP via Edge/Supabase.
+      for (const id of ids) {
+        const a = byId.get(id);
+        const url = a?.url;
+        if (!url) continue;
+
+        // tenta baixar direto (se o storage permitir)
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.download = a?.name ?? 'download';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        // pequeno respiro para evitar bloqueio do browser
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 120));
+      }
+
+      showToast({ type: 'success', text: `Download iniciado para ${ids.length} item(ns).` });
+    } catch (e: any) {
+      showToast({ type: 'error', text: e?.message ?? 'Falha ao baixar selecionados.' });
+    } finally {
+      setBulkActionBusy(false);
+    }
+  }, [scopedAssets, selectedIds, showToast]);
+
+  const bulkDeleteSelected = React.useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const n = selectedIds.size;
+    const ok = confirm(`Deletar ${n} asset(s) selecionado(s)? Essa ação não pode ser desfeita.`);
+    if (!ok) return;
+
+    try {
+      setBulkActionBusy(true);
+
+      const ids = Array.from(selectedIds);
+      const byId = new Map<string, any>();
+      for (const a of scopedAssets ?? []) byId.set(a.id, a);
+
+      for (const id of ids) {
+        const a = byId.get(id);
+        if (!a) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await deleteAsset(a);
+      }
+
+      await refresh();
+      setSelectedIds(new Set());
+      setAnchorIndex(null);
+
+      showToast({ type: 'success', text: `${n} asset(s) deletado(s).` });
+    } catch (e: any) {
+      showToast({ type: 'error', text: e?.message ?? 'Falha ao deletar selecionados.' });
+    } finally {
+      setBulkActionBusy(false);
+    }
+  }, [deleteAsset, refresh, scopedAssets, selectedIds, showToast]);
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -1212,7 +1287,7 @@ export const DashboardPage: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:border-gold/40 transition-colors"
+                              className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:border-gold/40 transition-colors disabled:opacity-60"
                               onClick={() => {
                                 setBulkMsg(null);
                                 setBulkMode('meta');
@@ -1227,19 +1302,29 @@ export const DashboardPage: React.FC = () => {
 
                                 setBulkOpen(true);
                               }}
+                              disabled={actionDisabled}
                             >
                               Menu filtros
                             </button>
 
                             <button
                               type="button"
-                              className="px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 transition-colors"
-                              onClick={() => {
-                                setSelectedIds(new Set());
-                                setAnchorIndex(null);
-                              }}
+                              className="px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 transition-colors disabled:opacity-60"
+                              onClick={bulkDownloadSelected}
+                              disabled={actionDisabled}
+                              title="Baixar selecionados"
                             >
-                              Limpar seleção
+                              Baixar
+                            </button>
+
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/15 transition-colors disabled:opacity-60"
+                              onClick={bulkDeleteSelected}
+                              disabled={actionDisabled}
+                              title="Deletar selecionados"
+                            >
+                              Deletar
                             </button>
                           </div>
                         </div>
