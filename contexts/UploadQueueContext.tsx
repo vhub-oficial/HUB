@@ -25,6 +25,9 @@ type Ctx = {
 
   enqueueFiles: (files: File[], opts: { categoryType: string; folderId: string | null }) => void;
   cancelItem: (id: string) => void;
+  cancelAll: () => void;
+  retryItem: (id: string) => void;
+  retryAll: () => void;
   clearFinished: () => void;
 };
 
@@ -110,6 +113,48 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     setItems((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'canceled', error: 'Cancelado' } : x)));
   }, []);
 
+  const cancelAll = useCallback(() => {
+    const snapshot = itemsRef.current;
+    for (const it of snapshot) cancelRef.current[it.id] = true;
+
+    setItems((prev) =>
+      prev.map((x) => (x.status === 'done' ? x : { ...x, status: 'canceled', progress: 0, error: 'Cancelado' }))
+    );
+  }, []);
+
+  const retryItem = useCallback((id: string) => {
+    delete cancelRef.current[id];
+
+    setItems((prev) =>
+      prev.map((x) =>
+        x.id === id && (x.status === 'error' || x.status === 'canceled')
+          ? { ...x, status: 'queued', progress: 0, error: null }
+          : x
+      )
+    );
+
+    setIsOpen(true);
+  }, []);
+
+  const retryAll = useCallback(() => {
+    const snapshot = itemsRef.current;
+    for (const it of snapshot) {
+      if (it.status === 'error' || it.status === 'canceled') {
+        delete cancelRef.current[it.id];
+      }
+    }
+
+    setItems((prev) =>
+      prev.map((x) =>
+        x.status === 'error' || x.status === 'canceled'
+          ? { ...x, status: 'queued', progress: 0, error: null }
+          : x
+      )
+    );
+
+    setIsOpen(true);
+  }, []);
+
   const clearFinished = useCallback(() => {
     setItems((prev) => prev.filter((x) => !['done', 'error', 'canceled'].includes(x.status)));
   }, []);
@@ -119,6 +164,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     const hasQueued = items.some((x) => x.status === 'queued');
     if (!hasQueued) return;
     if (runningRef.current) return;
+    if (!uploadAsset) return;
 
     runningRef.current = true;
 
@@ -176,6 +222,8 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
               )
             );
           }
+
+          await new Promise((r) => setTimeout(r, 0));
         }
       } finally {
         runningRef.current = false;
@@ -190,8 +238,11 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     close,
     enqueueFiles,
     cancelItem,
+    cancelAll,
+    retryItem,
+    retryAll,
     clearFinished,
-  }), [items, isOpen, open, close, enqueueFiles, cancelItem, clearFinished]);
+  }), [items, isOpen, open, close, enqueueFiles, cancelItem, cancelAll, retryItem, retryAll, clearFinished]);
 
   return <UploadQueueContext.Provider value={value}>{children}</UploadQueueContext.Provider>;
 }
