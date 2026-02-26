@@ -629,41 +629,74 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const downloadZipFromEdge = async (payload: { ids?: string[]; folderId?: string | null; filename?: string }) => {
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vhub-zip`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}`,
-      },
-      body: JSON.stringify(payload),
-    });
+  // ✅ Download ZIP via Edge Function vhub-zip (selecionados ou pasta)
+  const downloadZipByIds = React.useCallback(async (ids: string[], filenameBase?: string) => {
+    try {
+      if (!ids?.length) {
+        showToast({ type: 'info', text: 'Nenhum asset selecionado para baixar.' });
+        return;
+      }
 
-    if (!res.ok) {
-      let msg = 'Falha no ZIP';
-      try {
-        const j = await res.json();
-        msg = j?.error ?? msg;
-      } catch {}
-      throw new Error(msg);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        showToast({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
+        return;
+      }
+
+      const supabaseUrl =
+        (process.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
+        (process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL as string) ||
+        (import.meta.env.VITE_SUPABASE_URL as string) ||
+        '';
+
+      const anonKey =
+        (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
+        (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+        '';
+
+      if (!supabaseUrl) {
+        showToast({ type: 'error', text: 'SUPABASE_URL ausente no ambiente.' });
+        return;
+      }
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/vhub-zip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          ...(anonKey ? { apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          ids,
+          filename: filenameBase || `vhub-${Date.now()}`,
+        }),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || `Falha ao gerar ZIP (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filenameBase || `vhub-${Date.now()}`}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      showToast({ type: 'success', text: `ZIP gerado com ${ids.length} item(ns).` });
+    } catch (e: any) {
+      console.error(e);
+      showToast({ type: 'error', text: e?.message ?? 'Falha ao baixar ZIP.' });
     }
-
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `${(payload.filename ?? 'vhub')}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 2500);
-  };
-
-  const downloadSelectedAsZip = async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) throw new Error('Nada selecionado.');
-    await downloadZipFromEdge({ ids, filename: `vhub-${type ?? 'assets'}-${Date.now()}` });
-  };
+  }, [showToast]);
 
   const deleteSelectedAssets = async () => {
     const ids = Array.from(selectedIds).filter(Boolean);
@@ -748,45 +781,6 @@ export const DashboardPage: React.FC = () => {
     }
   }, [bulkFieldKey, bulkMode, bulkTagMode, bulkValue, refresh, scopedAssets, selectedIds, showToast, updateAsset]);
 
-  const bulkDownloadSelected = React.useCallback(async () => {
-    if (selectedIds.size === 0) return;
-
-    try {
-      setBulkActionBusy(true);
-
-      const ids = Array.from(selectedIds);
-      const byId = new Map<string, any>();
-      for (const a of scopedAssets ?? []) byId.set(a.id, a);
-
-      // MVP: abre downloads em novas abas (pode ser bloqueado se forem muitos)
-      // Para 5-20 itens funciona bem; para muitos, futuramente fazemos ZIP via Edge/Supabase.
-      for (const id of ids) {
-        const a = byId.get(id);
-        const url = a?.url;
-        if (!url) continue;
-
-        // tenta baixar direto (se o storage permitir)
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noreferrer';
-        link.download = a?.name ?? 'download';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        // pequeno respiro para evitar bloqueio do browser
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((r) => setTimeout(r, 120));
-      }
-
-      showToast({ type: 'success', text: `Download iniciado para ${ids.length} item(ns).` });
-    } catch (e: any) {
-      showToast({ type: 'error', text: e?.message ?? 'Falha ao baixar selecionados.' });
-    } finally {
-      setBulkActionBusy(false);
-    }
-  }, [scopedAssets, selectedIds, showToast]);
 
   const bulkDeleteSelected = React.useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -1186,11 +1180,11 @@ export const DashboardPage: React.FC = () => {
                                      onClick={async () => {
                                        setFolderMenuOpenId(null);
                                        try {
-                                         await downloadZipFromEdge({
-                                           folderId: f.id,
-                                           filename: `vhub-${type ?? 'assets'}-pasta-${Date.now()}`,
-                                         });
-                                         showToast({ type: 'success', text: 'Download iniciado (ZIP)' });
+                                         const folderAssetsIds = scopedAssets
+                                           .filter((a) => a.folder_id === f.id)
+                                           .map((a) => a.id);
+                                         const base = `${(type ?? 'vhub').toLowerCase()}-pasta-${new Date().toISOString().slice(0, 10)}`;
+                                         await downloadZipByIds(folderAssetsIds, base);
                                        } catch (e: any) {
                                          showToast({ type: 'error', text: e?.message ?? 'Falha no download' });
                                        }
@@ -1310,11 +1304,15 @@ export const DashboardPage: React.FC = () => {
                             <button
                               type="button"
                               className="px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 transition-colors disabled:opacity-60"
-                              onClick={bulkDownloadSelected}
+                              onClick={() => {
+                                const ids = Array.from(selectedIds);
+                                const base = `${(type ?? 'vhub').toLowerCase()}-${activeFolderId ? 'pasta' : 'raiz'}-${new Date().toISOString().slice(0, 10)}`;
+                                downloadZipByIds(ids, base);
+                              }}
                               disabled={actionDisabled}
                               title="Baixar selecionados"
                             >
-                              Baixar
+                              Baixar ZIP
                             </button>
 
                             <button
@@ -1393,8 +1391,9 @@ export const DashboardPage: React.FC = () => {
               closeCtxMenu();
               showToast({ type: 'info', text: 'Preparando ZIP…' });
               try {
-                await downloadSelectedAsZip();
-                showToast({ type: 'success', text: 'ZIP gerado — download iniciado.' });
+                const ids = Array.from(selectedIds);
+                const base = `${(type ?? 'vhub').toLowerCase()}-${activeFolderId ? 'pasta' : 'raiz'}-${new Date().toISOString().slice(0, 10)}`;
+                await downloadZipByIds(ids, base);
               } catch (e: any) {
                 showToast({ type: 'error', text: e?.message ?? 'Falha ao gerar ZIP' });
               }
