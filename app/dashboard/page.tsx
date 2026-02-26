@@ -208,7 +208,9 @@ export const DashboardPage: React.FC = () => {
     if (activeFolderId) return activeFolderId;
     return null;
   }, [activeFolderId]);
-  const { options, loading: filterOptionsLoading } = useFilterOptions(type, effectiveFolderId);
+  const { loading: filterOptionsLoading, options } = useFilterOptions(type, effectiveFolderId);
+  // ✅ opções para BULK: categoria inteira (ignora pasta)
+  const { loading: bulkOptionsLoading, options: bulkOptions } = useFilterOptions(type, undefined);
   // Usaremos o mesmo seletor para ordenar também os assets.
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
@@ -345,9 +347,9 @@ export const DashboardPage: React.FC = () => {
 
   const bulkValueOptions = React.useMemo(() => {
     if (!bulkFieldKey) return [];
-    const arr = (options?.meta?.[bulkFieldKey] ?? []) as any[];
+    const arr = (bulkOptions?.meta?.[bulkFieldKey] ?? []) as any[];
     return arr.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean);
-  }, [options, bulkFieldKey]);
+  }, [bulkOptions, bulkFieldKey]);
 
   React.useEffect(() => {
     if (!bulkOpen) return;
@@ -693,19 +695,13 @@ export const DashboardPage: React.FC = () => {
     try {
       const ids = Array.from(selectedIds);
 
-      const byId = new Map<string, any>();
-      for (const a of scopedAssets ?? []) byId.set(a.id, a);
+      const { data, error } = await supabase.rpc('bulk_set_asset_meta_field', {
+        p_ids: ids,
+        p_key: bulkFieldKey,
+        p_value: bulkValue.trim(),
+      });
 
-      for (const id of ids) {
-        const a = byId.get(id);
-        const nextMeta = {
-          ...(a?.meta ?? {}),
-          [bulkFieldKey]: bulkValue.trim(),
-        };
-
-        // eslint-disable-next-line no-await-in-loop
-        await updateAsset(id, { meta: nextMeta });
-      }
+      if (error) throw error;
 
       await refresh();
       setBulkOpen(false);
@@ -714,13 +710,16 @@ export const DashboardPage: React.FC = () => {
       setSelectedIds(new Set());
       setAnchorIndex(null);
 
-      showToast({ type: 'success', text: `Metadado aplicado em ${ids.length} item(ns).` });
+      showToast({
+        type: 'success',
+        text: `Filtro aplicado em ${data ?? ids.length} item(ns).`,
+      });
     } catch (e: any) {
-      setBulkMsg(e?.message ?? 'Falha ao aplicar metadado em lote.');
+      setBulkMsg(e?.message ?? 'Falha ao aplicar filtro em lote.');
     } finally {
       setBulkBusy(false);
     }
-  }, [bulkFieldKey, bulkValue, selectedIds, scopedAssets, updateAsset, refresh, showToast]);
+  }, [bulkFieldKey, bulkValue, selectedIds, refresh, showToast]);
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -1201,12 +1200,12 @@ export const DashboardPage: React.FC = () => {
                                 setBulkFieldKey(first);
                                 setBulkValue('');
                                 // se já tiver opções, pré-seleciona a primeira (ajuda UX)
-                                const firstOpts = (options?.meta?.[first] ?? []) as any[];
+                                const firstOpts = (bulkOptions?.meta?.[first] ?? []) as any[];
                                 if (first && firstOpts.length > 0) setBulkValue(String(firstOpts[0]));
                                 setBulkOpen(true);
                               }}
                             >
-                              Aplicar metadado
+                              Menu filtros
                             </button>
 
                             <button
@@ -1367,7 +1366,7 @@ export const DashboardPage: React.FC = () => {
                       setBulkValue('');
                       setBulkMsg(null);
 
-                      const opts = (options?.meta?.[nextKey] ?? []) as any[];
+                      const opts = (bulkOptions?.meta?.[nextKey] ?? []) as any[];
                       if (opts.length > 0) setBulkValue(String(opts[0]));
                     }}
                     disabled={bulkBusy}
@@ -1383,11 +1382,11 @@ export const DashboardPage: React.FC = () => {
                 <div>
                   <div className="text-xs text-gray-400 mb-1">Valor</div>
 
-                  {filterOptionsLoading ? (
+                  {bulkOptionsLoading ? (
                     <div className="text-sm text-gray-400">Carregando opções...</div>
                   ) : bulkValueOptions.length === 0 ? (
                     <div className="text-sm text-gray-400">
-                      Nenhuma opção encontrada para este campo nesta pasta/escopo.
+                      Nenhuma opção encontrada para este campo na categoria.
                     </div>
                   ) : (
                     <select

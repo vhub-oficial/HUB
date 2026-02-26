@@ -507,14 +507,17 @@ export function useAssets(args?: AssetsArgs) {
       if (!user?.id) throw new Error('não autenticado');
       if (role === 'viewer') throw new Error('viewer não pode editar');
 
+      const upd: any = {};
+      if (patch.name !== undefined) upd.name = patch.name;
+      if (patch.tags !== undefined) upd.tags = patch.tags;
+      if (patch.meta !== undefined) upd.meta = patch.meta;
+      if (patch.url !== undefined) upd.url = patch.url;
+
+      if (Object.keys(upd).length === 0) return true;
+
       const { error } = await supabase
         .from('assets')
-        .update({
-          name: patch.name,
-          tags: patch.tags,
-          meta: patch.meta,
-          url: patch.url,
-        })
+        .update(upd)
         .eq('organization_id', organizationId)
         .eq('id', id);
 
