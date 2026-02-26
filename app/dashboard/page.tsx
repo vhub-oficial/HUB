@@ -234,6 +234,8 @@ export const DashboardPage: React.FC = () => {
   const [gridDensity, setGridDensity] = React.useState<'compact' | 'default' | 'large'>('default');
   const [gridMenuOpen, setGridMenuOpen] = React.useState(false);
   const [bulkOpen, setBulkOpen] = React.useState(false);
+  const [bulkMode, setBulkMode] = React.useState<'meta' | 'tags'>('meta');
+  const [bulkTagMode, setBulkTagMode] = React.useState<'add' | 'replace'>('add');
   const [bulkFieldKey, setBulkFieldKey] = React.useState<string>('');
   const [bulkValue, setBulkValue] = React.useState<string>('');
   const [bulkBusy, setBulkBusy] = React.useState(false);
@@ -350,6 +352,11 @@ export const DashboardPage: React.FC = () => {
     const arr = (bulkOptions?.meta?.[bulkFieldKey] ?? []) as any[];
     return arr.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean);
   }, [bulkOptions, bulkFieldKey]);
+
+  const bulkTagOptions = React.useMemo(() => {
+    const arr = (bulkOptions?.tags ?? []) as any[];
+    return arr.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean);
+  }, [bulkOptions]);
 
   React.useEffect(() => {
     if (!bulkOpen) return;
@@ -676,7 +683,7 @@ export const DashboardPage: React.FC = () => {
 
 
   const applyBulkMeta = React.useCallback(async () => {
-    if (!bulkFieldKey) {
+    if (bulkMode === 'meta' && !bulkFieldKey) {
       setBulkMsg('Selecione um campo.');
       return;
     }
@@ -694,17 +701,35 @@ export const DashboardPage: React.FC = () => {
 
     try {
       const ids = Array.from(selectedIds);
+      const byId = new Map(scopedAssets.map((a) => [a.id, a]));
 
-      const { data, error } = await supabase.rpc('bulk_set_asset_meta_field', {
-        p_ids: ids,
-        p_key: bulkFieldKey,
-        p_value: bulkValue.trim(),
-      });
+      for (const id of ids) {
+        const a = byId.get(id);
 
-      if (error) throw error;
+        if (bulkMode === 'meta') {
+          const nextMeta = {
+            ...(a?.meta ?? {}),
+            [bulkFieldKey]: bulkValue.trim(),
+          };
+          // eslint-disable-next-line no-await-in-loop
+          await updateAsset(id, { meta: nextMeta });
+        } else {
+          const tag = bulkValue.trim();
+          const prevTags: string[] = Array.isArray(a?.tags) ? a.tags : [];
+          const nextTags =
+            bulkTagMode === 'replace'
+              ? [tag]
+              : Array.from(new Set([...prevTags, tag]));
+
+          // eslint-disable-next-line no-await-in-loop
+          await updateAsset(id, { tags: nextTags });
+        }
+      }
 
       await refresh();
       setBulkOpen(false);
+      setBulkMode('meta');
+      setBulkTagMode('add');
       setBulkFieldKey('');
       setBulkValue('');
       setSelectedIds(new Set());
@@ -712,14 +737,14 @@ export const DashboardPage: React.FC = () => {
 
       showToast({
         type: 'success',
-        text: `Filtro aplicado em ${data ?? ids.length} item(ns).`,
+        text: `Aplicado em ${ids.length} item(ns).`,
       });
     } catch (e: any) {
       setBulkMsg(e?.message ?? 'Falha ao aplicar filtro em lote.');
     } finally {
       setBulkBusy(false);
     }
-  }, [bulkFieldKey, bulkValue, selectedIds, refresh, showToast]);
+  }, [bulkFieldKey, bulkMode, bulkTagMode, bulkValue, refresh, scopedAssets, selectedIds, showToast, updateAsset]);
 
   // renomear
   const onRenameFolder = async (folderId: string, currentName: string) => {
@@ -1190,12 +1215,16 @@ export const DashboardPage: React.FC = () => {
                               className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:border-gold/40 transition-colors"
                               onClick={() => {
                                 setBulkMsg(null);
+                                setBulkMode('meta');
+                                setBulkTagMode('add');
+
                                 const first = bulkMetaFields?.[0]?.key ?? '';
                                 setBulkFieldKey(first);
                                 setBulkValue('');
-                                // se já tiver opções, pré-seleciona a primeira (ajuda UX)
+
                                 const firstOpts = (bulkOptions?.meta?.[first] ?? []) as any[];
                                 if (first && firstOpts.length > 0) setBulkValue(String(firstOpts[0]));
+
                                 setBulkOpen(true);
                               }}
                             >
@@ -1327,8 +1356,19 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {bulkOpen && type && (
-        <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-6">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6">
+        <div
+          className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center p-6"
+          data-keep-selection
+          onMouseDown={(e) => {
+            // impede o listener global/capture de “ver” isso como clique fora
+            e.stopPropagation();
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6"
+            data-keep-selection
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-white font-semibold text-lg">Aplicar metadado</div>
@@ -1350,54 +1390,126 @@ export const DashboardPage: React.FC = () => {
             <div className="mt-5">
               <div className="space-y-3">
                 <div>
-                  <div className="text-xs text-gray-400 mb-1">Campo</div>
+                  <div className="text-xs text-gray-400 mb-1">Tipo</div>
                   <select
                     className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                    value={bulkFieldKey}
+                    value={bulkMode}
                     onChange={(e) => {
-                      const nextKey = e.target.value;
-                      setBulkFieldKey(nextKey);
-                      setBulkValue('');
+                      const m = e.target.value as 'meta' | 'tags';
+                      setBulkMode(m);
                       setBulkMsg(null);
 
-                      const opts = (bulkOptions?.meta?.[nextKey] ?? []) as any[];
-                      if (opts.length > 0) setBulkValue(String(opts[0]));
+                      if (m === 'meta') {
+                        const first = bulkMetaFields?.[0]?.key ?? '';
+                        setBulkFieldKey(first);
+                        setBulkValue('');
+                        const firstOpts = (bulkOptions?.meta?.[first] ?? []) as any[];
+                        if (first && firstOpts.length > 0) setBulkValue(String(firstOpts[0]));
+                      } else {
+                        setBulkFieldKey('__tags__');
+                        setBulkValue('');
+                        if (bulkTagOptions.length > 0) setBulkValue(String(bulkTagOptions[0]));
+                      }
                     }}
                     disabled={bulkBusy}
                   >
-                    {(bulkMetaFields ?? []).map((f) => (
-                      <option key={f.key} value={f.key}>
-                        {f.label}
-                      </option>
-                    ))}
+                    <option value="meta">Metadado</option>
+                    <option value="tags">Tags</option>
                   </select>
                 </div>
 
-                <div>
-                  <div className="text-xs text-gray-400 mb-1">Valor</div>
+                {bulkMode === 'meta' && (
+                  <>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Campo</div>
+                      <select
+                        className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                        value={bulkFieldKey}
+                        onChange={(e) => {
+                          const nextKey = e.target.value;
+                          setBulkFieldKey(nextKey);
+                          setBulkValue('');
+                          setBulkMsg(null);
 
-                  {bulkOptionsLoading ? (
-                    <div className="text-sm text-gray-400">Carregando opções...</div>
-                  ) : bulkValueOptions.length === 0 ? (
-                    <div className="text-sm text-gray-400">
-                      Nenhuma opção encontrada para este campo na categoria.
+                          const opts = (bulkOptions?.meta?.[nextKey] ?? []) as any[];
+                          if (opts.length > 0) setBulkValue(String(opts[0]));
+                        }}
+                        disabled={bulkBusy}
+                      >
+                        {(bulkMetaFields ?? []).map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ) : (
-                    <select
-                      className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
-                      value={bulkValue}
-                      onChange={(e) => setBulkValue(e.target.value)}
-                      disabled={bulkBusy}
-                    >
-                      {bulkValueOptions.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
 
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Valor</div>
+
+                      {bulkOptionsLoading ? (
+                        <div className="text-sm text-gray-400">Carregando opções...</div>
+                      ) : bulkValueOptions.length === 0 ? (
+                        <div className="text-sm text-gray-400">
+                          Nenhuma opção encontrada para este campo na categoria.
+                        </div>
+                      ) : (
+                        <select
+                          className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                          value={bulkValue}
+                          onChange={(e) => setBulkValue(e.target.value)}
+                          disabled={bulkBusy}
+                        >
+                          {bulkValueOptions.map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {bulkMode === 'tags' && (
+                  <>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Modo</div>
+                      <select
+                        className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                        value={bulkTagMode}
+                        onChange={(e) => setBulkTagMode(e.target.value as 'add' | 'replace')}
+                        disabled={bulkBusy}
+                      >
+                        <option value="add">Adicionar tag</option>
+                        <option value="replace">Substituir tags</option>
+                      </select>
+                      <div className="mt-1 text-xs text-gray-500">
+                        “Adicionar” é mais seguro. “Substituir” apaga tags atuais e deixa só a escolhida.
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Tag</div>
+                      {filterOptionsLoading ? (
+                        <div className="text-sm text-gray-400">Carregando opções...</div>
+                      ) : bulkTagOptions.length === 0 ? (
+                        <div className="text-sm text-gray-400">Nenhuma tag encontrada neste escopo.</div>
+                      ) : (
+                        <select
+                          className="w-full bg-black/40 border border-border rounded-lg px-3 py-2 text-white"
+                          value={bulkValue}
+                          onChange={(e) => setBulkValue(e.target.value)}
+                          disabled={bulkBusy}
+                        >
+                          {bulkTagOptions.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </>
+                )}
                 {bulkMsg && <div className="text-sm text-red-300">{bulkMsg}</div>}
               </div>
 
@@ -1414,7 +1526,7 @@ export const DashboardPage: React.FC = () => {
                   type="button"
                   className="px-4 py-2 rounded-xl bg-gold text-black font-semibold hover:opacity-90 disabled:opacity-60"
                   onClick={applyBulkMeta}
-                  disabled={bulkBusy || !bulkFieldKey || !bulkValue.trim() || selectedCount === 0}
+                  disabled={bulkBusy || (bulkMode === 'meta' && !bulkFieldKey) || !bulkValue.trim() || selectedCount === 0}
                 >
                   {bulkBusy ? 'Aplicando…' : 'Aplicar'}
                 </button>
