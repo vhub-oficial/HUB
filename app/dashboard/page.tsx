@@ -413,7 +413,12 @@ export const DashboardPage: React.FC = () => {
   const actionDisabled = bulkActionBusy || bulkBusy || isBusyMove;
 
   // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
-  const showAssetFilters = !!type && (scopedAssets?.length ?? 0) > 0;
+  const hasActiveAssetFilters =
+    !!(q && q.trim()) ||
+    !!(filters?.tags && String(filters.tags).trim()) ||
+    Object.values(filters?.meta ?? {}).some((v) => !!String(v ?? '').trim());
+
+  const showAssetFilters = !!type && ((scopedAssets?.length ?? 0) > 0 || hasActiveAssetFilters);
 
   useEffect(() => {
     if (!type) return;
@@ -1368,11 +1373,24 @@ export const DashboardPage: React.FC = () => {
                         </button>
                       </div>
                     )}
-                    {scopedAssets.length === 0 && !isOverview && (
-                      <div className="text-gray-500 text-sm mt-3">
-                        {activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}
-                      </div>
-                    )}
+                  {scopedAssets.length === 0 && !isOverview && (
+                    <div className="text-gray-500 text-sm mt-3 flex items-center gap-3">
+                      {hasActiveAssetFilters ? (
+                        <>
+                          <span>Nenhum resultado encontrado.</span>
+                          <button
+                            type="button"
+                            className="text-gold/90 hover:text-gold underline underline-offset-4"
+                            onClick={() => setFilters({ tags: '', meta: {} })}
+                          >
+                            Limpar filtros
+                          </button>
+                        </>
+                      ) : (
+                        <span>{activeFolderId ? 'Nenhum asset nesta pasta.' : 'Nenhum asset solto.'}</span>
+                      )}
+                    </div>
+                  )}
                  </div>
              </div>
          )}
