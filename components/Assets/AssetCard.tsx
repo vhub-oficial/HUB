@@ -19,6 +19,19 @@ type Props = {
   onContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
 };
 
+type VhubAudioSingleton = {
+  audio: HTMLAudioElement;
+  assetId: string | null;
+};
+
+declare global {
+  interface Window {
+    __vhubAudio?: VhubAudioSingleton;
+  }
+}
+
+const AUDIO_EVT = 'vhub:audio:play';
+
 const isExternal = (asset: AssetRow) => {
   const source = asset.meta?.source;
   if (source === 'external') return true;
@@ -93,7 +106,34 @@ export const AssetCard: React.FC<Props> = ({
   const { organizationId, role } = useAuth();
   const { deleteAsset } = useAssets();
   const [src, setSrc] = React.useState<string>('');
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [isAudioLoading, setIsAudioLoading] = React.useState(false);
   const external = React.useMemo(() => isExternal(asset), [asset.id]);
+  const audioCapable = React.useMemo(() => isAudio(asset), [asset]);
+  const assetIdRef = React.useRef<string>(asset.id);
+
+  React.useEffect(() => {
+    assetIdRef.current = asset.id;
+  }, [asset.id]);
+
+  React.useEffect(() => {
+    const onOtherPlay = (ev: Event) => {
+      const ce = ev as CustomEvent<{ assetId: string }>;
+      const otherId = ce?.detail?.assetId;
+      if (!otherId || otherId === assetIdRef.current) return;
+
+      if (isPlaying) {
+        try {
+          const singleton = window.__vhubAudio;
+          if (singleton?.audio) singleton.audio.pause();
+        } catch {}
+        setIsPlaying(false);
+      }
+    };
+
+    window.addEventListener(AUDIO_EVT, onOtherPlay as EventListener);
+    return () => window.removeEventListener(AUDIO_EVT, onOtherPlay as EventListener);
+  }, [isPlaying]);
 
   const handleDownload = React.useCallback(async () => {
     try {
@@ -122,6 +162,108 @@ export const AssetCard: React.FC<Props> = ({
       navigate(`/assets/${asset.id}`);
     }
   }, [asset, organizationId, navigate]);
+
+  const getPlayableAudioUrl = React.useCallback(async (): Promise<string> => {
+    if (isExternal(asset)) {
+      const direct = (asset.meta?.download_url || asset.url || '').toString();
+      if (!direct) throw new Error('invalid_external_url');
+      return direct;
+    }
+
+    if (!organizationId) throw new Error('missing_organization');
+    if (!asset.url) throw new Error('missing_storage_path');
+
+    const bucket = getOrgBucketName(organizationId);
+    const signed = await createSignedUrl(bucket, asset.url, 3600);
+    if (!signed) throw new Error('signed_url_failed');
+    return signed;
+  }, [asset, organizationId]);
+
+  const stopIfSingletonIsThis = React.useCallback(() => {
+    const singleton = window.__vhubAudio;
+    if (singleton?.assetId === asset.id && singleton.audio) {
+      try {
+        singleton.audio.pause();
+      } catch {}
+      singleton.assetId = null;
+    }
+    setIsPlaying(false);
+  }, [asset.id]);
+
+  const toggleAudio = React.useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const singleton = window.__vhubAudio;
+      if (singleton?.assetId === asset.id && singleton.audio && !singleton.audio.paused) {
+        singleton.audio.pause();
+        setIsPlaying(false);
+        return;
+      }
+
+      setIsAudioLoading(true);
+
+      try {
+        window.dispatchEvent(new CustomEvent(AUDIO_EVT, { detail: { assetId: asset.id } }));
+        const url = await getPlayableAudioUrl();
+
+        if (!window.__vhubAudio?.audio) {
+          window.__vhubAudio = { audio: new Audio(), assetId: null };
+        }
+
+        const s = window.__vhubAudio;
+        if (!s) throw new Error('audio_singleton_missing');
+
+        const audio = s.audio;
+        try {
+          audio.pause();
+        } catch {}
+
+        s.assetId = asset.id;
+
+        audio.onended = () => {
+          if (window.__vhubAudio?.assetId === assetIdRef.current) {
+            window.__vhubAudio.assetId = null;
+          }
+          setIsPlaying(false);
+        };
+
+        audio.onpause = () => {
+          if (window.__vhubAudio?.assetId === assetIdRef.current) {
+            setIsPlaying(false);
+          }
+        };
+
+        audio.onplay = () => {
+          if (window.__vhubAudio?.assetId === assetIdRef.current) {
+            setIsPlaying(true);
+          }
+        };
+
+        if (audio.src !== url) audio.src = url;
+
+        try {
+          audio.load();
+        } catch {}
+
+        await audio.play();
+        setIsPlaying(true);
+      } catch (err) {
+        console.error('[AudioInline] play failed', err);
+        setIsPlaying(false);
+      } finally {
+        setIsAudioLoading(false);
+      }
+    },
+    [asset.id, getPlayableAudioUrl],
+  );
+
+  React.useEffect(() => {
+    return () => {
+      stopIfSingletonIsThis();
+    };
+  }, [stopIfSingletonIsThis]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -309,6 +451,34 @@ export const AssetCard: React.FC<Props> = ({
         className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
         data-no-marquee
       >
+        {audioCapable && (
+          <button
+            type="button"
+            data-no-marquee
+            onClick={toggleAudio}
+            className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
+            title={isPlaying ? 'Pausar' : 'Reproduzir'}
+            aria-label={isPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}
+            disabled={isAudioLoading}
+          >
+            {isPlaying ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M7 6v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M17 6v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M9 7l10 5-10 5V7Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
+        )}
+
         <button
           data-no-marquee
           className="w-9 h-9 rounded-lg bg-black/50 border border-border text-gray-200 hover:border-gold/40 flex items-center justify-center"
