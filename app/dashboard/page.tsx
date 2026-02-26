@@ -241,6 +241,8 @@ export const DashboardPage: React.FC = () => {
   const [bulkBusy, setBulkBusy] = React.useState(false);
   const [bulkActionBusy, setBulkActionBusy] = React.useState(false);
   const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
+  const [zipBusy, setZipBusy] = React.useState(false);
+  const [zipBusyLabel, setZipBusyLabel] = React.useState<string | null>(null);
   const closeCtxMenu = React.useCallback(() => setCtxMenu(null), []);
 
   React.useEffect(() => {
@@ -631,72 +633,83 @@ export const DashboardPage: React.FC = () => {
 
   // ✅ Download ZIP via Edge Function vhub-zip (selecionados ou pasta)
   const downloadZipByIds = React.useCallback(async (ids: string[], filenameBase?: string) => {
-    try {
-      if (!ids?.length) {
-        showToast({ type: 'info', text: 'Nenhum asset selecionado para baixar.' });
-        return;
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      if (!accessToken) {
-        showToast({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
-        return;
-      }
-
-      const supabaseUrl =
-        (process.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
-        (process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL as string) ||
-        (import.meta.env.VITE_SUPABASE_URL as string) ||
-        '';
-
-      const anonKey =
-        (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
-        (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
-        '';
-
-      if (!supabaseUrl) {
-        showToast({ type: 'error', text: 'SUPABASE_URL ausente no ambiente.' });
-        return;
-      }
-
-      const res = await fetch(`${supabaseUrl}/functions/v1/vhub-zip`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          ...(anonKey ? { apikey: anonKey } : {}),
-        },
-        body: JSON.stringify({
-          ids,
-          filename: filenameBase || `vhub-${Date.now()}`,
-        }),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(txt || `Falha ao gerar ZIP (${res.status})`);
-      }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${filenameBase || `vhub-${Date.now()}`}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      window.URL.revokeObjectURL(url);
-
-      showToast({ type: 'success', text: `ZIP gerado com ${ids.length} item(ns).` });
-    } catch (e: any) {
-      console.error(e);
-      showToast({ type: 'error', text: e?.message ?? 'Falha ao baixar ZIP.' });
+    if (!ids?.length) {
+      throw new Error('Nenhum asset selecionado para baixar.');
     }
-  }, [showToast]);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+
+    if (!accessToken) {
+      throw new Error('Sessão expirada. Faça login novamente.');
+    }
+
+    const supabaseUrl =
+      (process.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
+      (process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL as string) ||
+      (import.meta.env.VITE_SUPABASE_URL as string) ||
+      '';
+
+    const anonKey =
+      (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
+      (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+      '';
+
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL ausente no ambiente.');
+    }
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/vhub-zip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        ids,
+        filename: filenameBase || `vhub-${Date.now()}`,
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || `Falha ao gerar ZIP (${res.status})`);
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filenameBase || `vhub-${Date.now()}`}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  }, []);
+
+  const handleDownloadZipSelected = React.useCallback(async () => {
+    if (zipBusy) return;
+
+    try {
+      setZipBusy(true);
+      setZipBusyLabel('Preparando ZIP…');
+      showToast({ type: 'info', text: 'Preparando ZIP… aguarde.' });
+
+      const ids = Array.from(selectedIds);
+      const base = `${(type ?? 'vhub').toLowerCase()}-${activeFolderId ? 'pasta' : 'raiz'}-${new Date().toISOString().slice(0, 10)}`;
+      await downloadZipByIds(ids, base);
+
+      showToast({ type: 'success', text: 'Download do ZIP iniciado.' });
+    } catch (e: any) {
+      showToast({ type: 'error', text: e?.message ?? 'Falha ao gerar ZIP.' });
+    } finally {
+      setZipBusy(false);
+      setZipBusyLabel(null);
+    }
+  }, [zipBusy, showToast, selectedIds, type, activeFolderId, downloadZipByIds]);
 
   const deleteSelectedAssets = async () => {
     const ids = Array.from(selectedIds).filter(Boolean);
@@ -1303,16 +1316,12 @@ export const DashboardPage: React.FC = () => {
 
                             <button
                               type="button"
-                              className="px-3 py-2 rounded-xl bg-black/30 border border-border text-gray-200 hover:border-gold/40 transition-colors disabled:opacity-60"
-                              onClick={() => {
-                                const ids = Array.from(selectedIds);
-                                const base = `${(type ?? 'vhub').toLowerCase()}-${activeFolderId ? 'pasta' : 'raiz'}-${new Date().toISOString().slice(0, 10)}`;
-                                downloadZipByIds(ids, base);
-                              }}
-                              disabled={actionDisabled}
-                              title="Baixar selecionados"
+                              className="px-3 py-2 rounded-xl bg-black/40 border border-border text-white hover:border-gold/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                              onClick={handleDownloadZipSelected}
+                              disabled={actionDisabled || zipBusy}
+                              title={zipBusy ? 'Aguarde: preparando ZIP…' : 'Baixar selecionados como ZIP'}
                             >
-                              Baixar ZIP
+                              {zipBusy ? (zipBusyLabel ?? 'Baixando…') : 'Baixar ZIP'}
                             </button>
 
                             <button
@@ -1325,6 +1334,12 @@ export const DashboardPage: React.FC = () => {
                               Deletar
                             </button>
                           </div>
+
+                          {zipBusy && (
+                            <div className="text-xs text-gray-300">
+                              Aguarde… gerando ZIP
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1389,17 +1404,11 @@ export const DashboardPage: React.FC = () => {
               e.preventDefault();
               e.stopPropagation();
               closeCtxMenu();
-              showToast({ type: 'info', text: 'Preparando ZIP…' });
-              try {
-                const ids = Array.from(selectedIds);
-                const base = `${(type ?? 'vhub').toLowerCase()}-${activeFolderId ? 'pasta' : 'raiz'}-${new Date().toISOString().slice(0, 10)}`;
-                await downloadZipByIds(ids, base);
-              } catch (e: any) {
-                showToast({ type: 'error', text: e?.message ?? 'Falha ao gerar ZIP' });
-              }
+              await handleDownloadZipSelected();
             }}
+            disabled={zipBusy}
           >
-            Baixar selecionados (ZIP)
+            {zipBusy ? (zipBusyLabel ?? 'Baixando…') : 'Baixar selecionados (ZIP)'}
           </button>
 
           {/* DELETE SELECIONADOS */}
