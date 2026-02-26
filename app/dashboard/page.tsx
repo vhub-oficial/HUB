@@ -1255,7 +1255,17 @@ export const DashboardPage: React.FC = () => {
                    className="mt-6"
                    onMouseDown={(e) => {
                      const el = e.target as HTMLElement | null;
-                     if (el?.closest?.('[data-keep-selection]')) return;
+                     if (!el) return;
+
+                     // Não limpar seleção em UIs que precisam manter seleção (ex.: modal/menu)
+                     if (el.closest('[data-keep-selection]')) return;
+
+                     // ✅ CRÍTICO: não limpar seleção quando o clique começou em um card
+                     // (isso garante multi-drag + badge)
+                     if (el.closest('[data-asset-card]')) return;
+
+                     // Não limpar se clicar em zonas de ação/menus do card
+                     if (el.closest('[data-no-marquee]')) return;
 
                      setSelectedIds(new Set());
                      setAnchorIndex(null);
