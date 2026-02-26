@@ -1147,18 +1147,9 @@ export const DashboardPage: React.FC = () => {
                  <div
                    className="mt-6"
                    onMouseDown={(e) => {
-                     const path = ((e as any).nativeEvent?.composedPath?.() ?? []) as any[];
-                     const insideMenu = path.some(
-                       (n) => n && (n as HTMLElement).dataset && (n as HTMLElement).dataset.selectionCtxMenu !== undefined
-                     );
-                     if (insideMenu) return;
+                     const el = e.target as HTMLElement | null;
+                     if (el?.closest?.('[data-keep-selection]')) return;
 
-                     const target = e.target as HTMLElement;
-
-                     // Se clicou dentro de um card, ignora
-                     if (target.closest('[data-asset-card]')) return;
-
-                     // Caso contrário, limpa seleção
                      setSelectedIds(new Set());
                      setAnchorIndex(null);
                    }}
@@ -1184,7 +1175,10 @@ export const DashboardPage: React.FC = () => {
                       density={gridDensity}
                     />
                     {type && selectedCount > 0 && (
-                      <div className="sticky bottom-4 mt-4 z-20 flex justify-center">
+                      <div
+                        className="sticky bottom-4 mt-4 z-20 flex justify-center"
+                        data-keep-selection
+                      >
                         <div className="w-full max-w-3xl rounded-2xl border border-border bg-black/80 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
                           <div className="text-sm text-gray-200">
                             <span className="font-semibold text-white">{selectedCount}</span> selecionado(s)
