@@ -11,6 +11,7 @@ import { FiltersBar, type FiltersValue } from '../../components/Assets/FiltersBa
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { GlobalDropOverlay } from '../../components/Uploads/GlobalDropOverlay';
 import { getCategoryMetaFields } from '../../lib/categoryMeta';
+import { normalizeCategoryType } from '@/lib/categoryType';
 
 export const DashboardPage: React.FC = () => {
   const normalizeType = (input: string | null | undefined) => {
@@ -343,12 +344,15 @@ export const DashboardPage: React.FC = () => {
     [location.pathname, location.search, navigate]
   );
 
-  const normalizedType = React.useMemo(() => (type ?? '').trim().toLowerCase(), [type]);
+  const normalizedCategory = React.useMemo(
+    () => normalizeCategoryType(type ?? null),
+    [type]
+  );
 
   const bulkMetaFields = React.useMemo(() => {
-    if (!normalizedType) return [];
-    return getCategoryMetaFields(normalizedType);
-  }, [normalizedType]);
+    if (!normalizedCategory) return [];
+    return getCategoryMetaFields(normalizedCategory);
+  }, [normalizedCategory]);
 
   const bulkValueOptions = React.useMemo(() => {
     if (!bulkFieldKey) return [];
@@ -372,9 +376,9 @@ export const DashboardPage: React.FC = () => {
 
   const foldersForCategory = useMemo(() => {
     const base = folders.filter((f) => !f.parent_id);
-    if (!normalizedType) return base;
-    return base.filter((f) => (f.category_type ?? null) === normalizedType);
-  }, [folders, normalizedType]);
+    if (!normalizedCategory) return base;
+    return base.filter((f) => (f.category_type ?? null) === normalizedCategory);
+  }, [folders, normalizedCategory]);
 
   const foldersFiltered = useMemo(() => {
     const qq = folderSearch.trim().toLowerCase();
