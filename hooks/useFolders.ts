@@ -19,7 +19,6 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
   const parentId = args?.parentId ?? null;
   const type = args?.type ?? null;
   const sort = args?.sort ?? 'recent';
-  const normalizedType = useMemo(() => normalizeCategoryType(type), [type]);
 
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,11 +51,12 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
 
   const load = useCallback(async () => {
     if (!organizationId) return;
+    const normalizedCategory = normalizeCategoryType(type ?? null);
     setLoading(true);
     setError(null);
 
-    if (sort === 'activity' && normalizedType && parentId === null) {
-      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: normalizedType });
+    if (sort === 'activity' && normalizedCategory && parentId === null) {
+      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: normalizedCategory });
       if (e) {
         setError(e.message);
         setFolders([]);
@@ -89,8 +89,8 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     if (parentId === null) q = q.is('parent_id', null);
     else q = q.eq('parent_id', parentId);
 
-    if (supportsCategoryType && normalizedType) {
-      q = q.eq('category_type', normalizedType);
+    if (supportsCategoryType && normalizedCategory) {
+      q = q.eq('category_type', normalizedCategory);
     }
 
     if (sort === 'name') q = q.order('name', { ascending: true });
@@ -106,7 +106,7 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
     }
 
     setLoading(false);
-  }, [organizationId, parentId, sort, supportsCategoryType, normalizedType]);
+  }, [organizationId, parentId, sort, supportsCategoryType, type]);
 
   const getFolderById = useCallback(async (id: string) => {
     if (!organizationId) return null;
