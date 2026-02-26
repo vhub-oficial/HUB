@@ -11,7 +11,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export function UploadTray() {
-  const { items, isOpen, close, clearFinished, cancelItem } = useUploadQueue();
+  const { items, isOpen, close, clearFinished, cancelItem, cancelAll, retryAll, retryItem } = useUploadQueue();
 
   if (!isOpen) return null;
 
@@ -30,6 +30,23 @@ export function UploadTray() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              className="text-xs px-3 py-1.5 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
+              onClick={retryAll}
+              title="Tentar novamente (erros e cancelados)"
+            >
+              Tentar novamente
+            </button>
+            <button
+              type="button"
+              className="text-xs px-3 py-1.5 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
+              onClick={cancelAll}
+              title="Cancelar todos"
+            >
+              Cancelar todos
+            </button>
+            <button
+              type="button"
               className="text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
               onClick={clearFinished}
               title="Limpar concluídos/erros"
@@ -64,15 +81,28 @@ export function UploadTray() {
                       )}
                     </div>
 
-                    {(it.status === 'queued' || it.status === 'uploading') && (
-                      <button
-                        className="text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-red-400/60"
-                        onClick={() => cancelItem(it.id)}
-                        title="Cancelar"
-                      >
-                        Cancelar
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {(it.status === 'queued' || it.status === 'uploading') && (
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-red-400/60"
+                          onClick={() => cancelItem(it.id)}
+                          title="Cancelar"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      {(it.status === 'error' || it.status === 'canceled') && (
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
+                          onClick={() => retryItem(it.id)}
+                          title="Tentar novamente"
+                        >
+                          Tentar novamente
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* progress (best-effort) */}
