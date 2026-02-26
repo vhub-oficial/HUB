@@ -16,6 +16,19 @@ type Props = {
   onItemContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
 };
 
+type MarqueeState = {
+  startPageX: number;
+  startPageY: number;
+  pageX: number;
+  pageY: number;
+  lastClientX: number;
+  lastClientY: number;
+  w: number;
+  h: number;
+  mode: 'replace' | 'add';
+  active: boolean;
+};
+
 function rectIntersects(a: DOMRect, b: DOMRect) {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
 }
@@ -34,16 +47,7 @@ export const AssetGrid: React.FC<Props> = ({
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
-  const [marquee, setMarquee] = React.useState<null | {
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    mode: 'replace' | 'add';
-    active: boolean;
-  }>(null);
+  const [marquee, setMarquee] = React.useState<MarqueeState | null>(null);
 
   const setItemRef = (id: string) => (el: HTMLDivElement | null) => {
     itemRefs.current[id] = el;
@@ -53,8 +57,10 @@ export const AssetGrid: React.FC<Props> = ({
     if (!containerRef.current || !marquee) return [];
     const cont = containerRef.current.getBoundingClientRect();
 
+    const leftPage = Math.min(marquee.startPageX, marquee.pageX);
+    const topPage = Math.min(marquee.startPageY, marquee.pageY);
     // marquee rect in viewport coords
-    const m = new DOMRect(marquee.x, marquee.y, marquee.w, marquee.h);
+    const m = new DOMRect(leftPage - window.scrollX, topPage - window.scrollY, marquee.w, marquee.h);
 
     const hit: string[] = [];
     for (const a of assets) {
@@ -86,11 +92,16 @@ export const AssetGrid: React.FC<Props> = ({
 
     const mode: 'replace' | 'add' = e.metaKey || e.ctrlKey ? 'add' : 'replace';
 
+    const sx = e.clientX + window.scrollX;
+    const sy = e.clientY + window.scrollY;
+
     setMarquee({
-      startX: e.clientX,
-      startY: e.clientY,
-      x: e.clientX,
-      y: e.clientY,
+      startPageX: sx,
+      startPageY: sy,
+      pageX: sx,
+      pageY: sy,
+      lastClientX: e.clientX,
+      lastClientY: e.clientY,
       w: 0,
       h: 0,
       mode,
@@ -103,16 +114,23 @@ export const AssetGrid: React.FC<Props> = ({
 
     const onMove = (ev: MouseEvent) => {
       setMarquee((prev) => {
-        if (!prev) return prev;
-        const x1 = prev.startX;
-        const y1 = prev.startY;
-        const x2 = ev.clientX;
-        const y2 = ev.clientY;
-        const x = Math.min(x1, x2);
-        const y = Math.min(y1, y2);
-        const w = Math.abs(x2 - x1);
-        const h = Math.abs(y2 - y1);
-        return { ...prev, x, y, w, h };
+        if (!prev?.active) return prev;
+
+        const px = ev.clientX + window.scrollX;
+        const py = ev.clientY + window.scrollY;
+
+        const w = Math.abs(px - prev.startPageX);
+        const h = Math.abs(py - prev.startPageY);
+
+        return {
+          ...prev,
+          pageX: px,
+          pageY: py,
+          lastClientX: ev.clientX,
+          lastClientY: ev.clientY,
+          w,
+          h,
+        };
       });
     };
 
@@ -130,13 +148,43 @@ export const AssetGrid: React.FC<Props> = ({
     };
   }, [marquee, computeHitIds, onMarqueeSelect]);
 
+  React.useEffect(() => {
+    if (!marquee?.active) return;
+
+    const onScroll = () => {
+      setMarquee((prev) => {
+        if (!prev?.active) return prev;
+
+        const px = prev.lastClientX + window.scrollX;
+        const py = prev.lastClientY + window.scrollY;
+
+        const w = Math.abs(px - prev.startPageX);
+        const h = Math.abs(py - prev.startPageY);
+
+        return { ...prev, pageX: px, pageY: py, w, h };
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [marquee?.active]);
+
   const marqueeStyle = React.useMemo(() => {
     if (!marquee) return null;
+
+    const leftPage = Math.min(marquee.startPageX, marquee.pageX);
+    const topPage = Math.min(marquee.startPageY, marquee.pageY);
+    const width = Math.abs(marquee.pageX - marquee.startPageX);
+    const height = Math.abs(marquee.pageY - marquee.startPageY);
+
+    const left = leftPage - window.scrollX;
+    const top = topPage - window.scrollY;
+
     return {
-      left: marquee.x,
-      top: marquee.y,
-      width: marquee.w,
-      height: marquee.h,
+      left,
+      top,
+      width,
+      height,
     } as React.CSSProperties;
   }, [marquee]);
 
