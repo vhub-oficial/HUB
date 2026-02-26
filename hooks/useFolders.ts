@@ -51,61 +51,59 @@ export function useFolders(args?: { parentId?: string | null; type?: string | nu
 
   const load = useCallback(async () => {
     if (!organizationId) return;
+    // ✅ category_type canônico (DB)
     const normalizedCategory = normalizeCategoryType(type ?? null);
     setLoading(true);
     setError(null);
 
-    if (sort === 'activity' && normalizedCategory && parentId === null) {
-      const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: normalizedCategory });
-      if (e) {
-        setError(e.message);
-        setFolders([]);
-        setLoading(false);
+    try {
+      if (sort === 'activity' && normalizedCategory && parentId === null) {
+        const { data, error: e } = await supabase.rpc('get_folders_with_stats', { p_category_type: normalizedCategory });
+        if (e) throw e;
+
+        const sorted = (data ?? []).sort((a: any, b: any) => {
+          const ta = a.last_asset_at ? new Date(a.last_asset_at).getTime() : 0;
+          const tb = b.last_asset_at ? new Date(b.last_asset_at).getTime() : 0;
+          if (tb !== ta) return tb - ta;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+
+        setFolders(sorted as FolderRow[]);
         return;
       }
 
-      const sorted = (data ?? []).sort((a: any, b: any) => {
-        const ta = a.last_asset_at ? new Date(a.last_asset_at).getTime() : 0;
-        const tb = b.last_asset_at ? new Date(b.last_asset_at).getTime() : 0;
-        if (tb !== ta) return tb - ta;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
+      const selectCols = supportsCategoryType
+        ? 'id,name,parent_id,organization_id,created_by,created_at,category_type'
+        : 'id,name,parent_id,organization_id,created_by,created_at';
 
-      setFolders(sorted as FolderRow[]);
-      setLoading(false);
-      return;
-    }
+      let q = supabase
+        .from('folders')
+        .select(selectCols)
+        .eq('organization_id', organizationId)
+        .limit(200);
 
-    const selectCols = supportsCategoryType
-      ? 'id,name,parent_id,organization_id,created_by,created_at,category_type'
-      : 'id,name,parent_id,organization_id,created_by,created_at';
+      if (parentId === null) q = q.is('parent_id', null);
+      else q = q.eq('parent_id', parentId);
 
-    let q = supabase
-      .from('folders')
-      .select(selectCols)
-      .eq('organization_id', organizationId)
-      .limit(200);
+      if (supportsCategoryType && normalizedCategory) {
+        q = q.eq('category_type', normalizedCategory);
+      }
 
-    if (parentId === null) q = q.is('parent_id', null);
-    else q = q.eq('parent_id', parentId);
+      if (sort === 'name') q = q.order('name', { ascending: true });
+      else q = q.order('created_at', { ascending: false });
 
-    if (supportsCategoryType && normalizedCategory) {
-      q = q.eq('category_type', normalizedCategory);
-    }
+      // ✅ IMPORTANTE: NUNCA usar single/maybeSingle aqui (é lista)
+      const { data, error: e } = await q;
 
-    if (sort === 'name') q = q.order('name', { ascending: true });
-    else q = q.order('created_at', { ascending: false });
+      if (e) throw e;
 
-    const { data, error: e } = await q;
-
-    if (e) {
-      setError(e.message);
-      setFolders([]);
-    } else {
       setFolders((data ?? []) as FolderRow[]);
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro ao carregar pastas');
+      setFolders([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, [organizationId, parentId, sort, supportsCategoryType, type]);
 
   const getFolderById = useCallback(async (id: string) => {
