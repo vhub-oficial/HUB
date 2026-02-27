@@ -134,6 +134,8 @@ export const AssetDetailPage: React.FC = () => {
       if (isExternal(asset)) nextPatch.url = url;
 
       await updateAsset(asset.id, nextPatch);
+      sessionStorage.setItem('vah:assets_dirty', '1');
+      window.dispatchEvent(new Event('vah:assets_changed'));
       setEditing(false);
 
       // refresh local state

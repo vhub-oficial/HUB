@@ -315,6 +315,16 @@ export const DashboardPage: React.FC = () => {
     deleteAsset,
   } = useAssets(assetsArgs);
 
+  useEffect(() => {
+    const dirty = sessionStorage.getItem('vah:assets_dirty');
+    if (dirty === '1') {
+      sessionStorage.removeItem('vah:assets_dirty');
+      setTimeout(() => {
+        refresh?.();
+      }, 0);
+    }
+  }, [refresh]);
+
   const handleRenameInline = React.useCallback(
     async (assetId: string, nextName: string) => {
       if (!canRenameInline) return;
