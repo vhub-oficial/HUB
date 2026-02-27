@@ -14,6 +14,7 @@ type Props = {
   onDeleted?: () => void;
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
   onItemContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
+  onRenameInline?: (assetId: string, nextName: string) => Promise<void> | void;
 };
 
 type MarqueeState = {
@@ -57,6 +58,7 @@ export const AssetGrid: React.FC<Props> = ({
   onDeleted,
   onDragStart,
   onItemContextMenu,
+  onRenameInline,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -301,6 +303,7 @@ export const AssetGrid: React.FC<Props> = ({
               selectionMode={selectionMode}
               onToggleSelect={onToggleSelect}
               onContextMenu={onItemContextMenu}
+              onRenameInline={onRenameInline}
             />
           </div>
         ))}

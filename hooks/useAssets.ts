@@ -518,7 +518,7 @@ export function useAssets(args?: AssetsArgs) {
   );
 
   const updateAsset = useCallback(
-    async (id: string, patch: Partial<AssetRow>) => {
+    async (assetId: string, patch: Partial<AssetRow>) => {
       if (!organizationId) throw new Error('organizationId ausente');
       if (!user?.id) throw new Error('não autenticado');
       if (role === 'viewer') throw new Error('viewer não pode editar');
@@ -535,9 +535,12 @@ export function useAssets(args?: AssetsArgs) {
         .from('assets')
         .update(upd)
         .eq('organization_id', organizationId)
-        .eq('id', id);
+        .eq('id', assetId);
 
       if (error) throw error;
+
+      setAssets((prev) => prev.map((a) => (a.id === assetId ? ({ ...a, ...upd } as AssetRow) : a)));
+
       return true;
     },
     [organizationId, user, role]

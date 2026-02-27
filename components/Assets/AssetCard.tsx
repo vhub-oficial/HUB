@@ -17,6 +17,7 @@ type Props = {
   selectionMode?: boolean;
   onToggleSelect?: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
   onContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
+  onRenameInline?: (assetId: string, nextName: string) => Promise<void> | void;
 };
 
 type VhubAudioSingleton = {
@@ -101,6 +102,7 @@ export const AssetCard: React.FC<Props> = ({
   selectedIds,
   onToggleSelect,
   onContextMenu,
+  onRenameInline,
 }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
@@ -111,10 +113,17 @@ export const AssetCard: React.FC<Props> = ({
   const external = React.useMemo(() => isExternal(asset), [asset.id]);
   const audioCapable = React.useMemo(() => isAudio(asset), [asset]);
   const assetIdRef = React.useRef<string>(asset.id);
+  const [renaming, setRenaming] = React.useState(false);
+  const [draftName, setDraftName] = React.useState(asset.name ?? '');
+  const [renameSaving, setRenameSaving] = React.useState(false);
 
   React.useEffect(() => {
     assetIdRef.current = asset.id;
   }, [asset.id]);
+
+  React.useEffect(() => {
+    if (!renaming) setDraftName(asset.name ?? '');
+  }, [asset.name, renaming]);
 
   React.useEffect(() => {
     const onOtherPlay = (ev: Event) => {
@@ -306,6 +315,33 @@ export const AssetCard: React.FC<Props> = ({
       mounted = false;
     };
   }, [asset.id, external, organizationId, (asset.meta as any)?.thumbnail_path, (asset.meta as any)?.thumbnail_bucket]);
+
+  const cancelRename = React.useCallback(() => {
+    setDraftName(asset.name ?? '');
+    setRenaming(false);
+    setRenameSaving(false);
+  }, [asset.name]);
+
+  const commitRename = React.useCallback(async () => {
+    if (!onRenameInline) {
+      setRenaming(false);
+      return;
+    }
+
+    const clean = String(draftName ?? '').trim();
+    if (!clean || clean === (asset.name ?? '').trim()) {
+      setRenaming(false);
+      return;
+    }
+
+    try {
+      setRenameSaving(true);
+      await onRenameInline(asset.id, clean);
+      setRenaming(false);
+    } finally {
+      setRenameSaving(false);
+    }
+  }, [onRenameInline, draftName, asset.id, asset.name]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
@@ -568,7 +604,98 @@ export const AssetCard: React.FC<Props> = ({
       </div>
 
       <div className="p-3">
-        <div className="text-white font-medium line-clamp-1">{asset.name}</div>
+        {/* NOME DO ASSET (inline rename) */}
+        <div
+          className="mt-2 px-3 pb-3"
+          data-no-marquee
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setRenaming(true);
+            setDraftName(asset.name ?? '');
+          }}
+        >
+          {!renaming ? (
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-white truncate" title={asset.name}>
+                {asset.name}
+              </div>
+
+              <button
+                type="button"
+                data-no-marquee
+                className="ml-auto text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setRenaming(true);
+                  setDraftName(asset.name ?? '');
+                }}
+                title="Renomear"
+              >
+                ✎
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={draftName}
+                disabled={renameSaving}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRename();
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelRename();
+                  }
+                }}
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-black/40 border border-border text-white text-sm outline-none focus:border-gold/60"
+              />
+
+              <button
+                type="button"
+                data-no-marquee
+                disabled={renameSaving}
+                className="text-xs px-3 py-2 rounded-xl border border-border bg-black/30 text-gray-200 hover:border-gold/40 disabled:opacity-50"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  commitRename();
+                }}
+                title="Salvar"
+              >
+                Salvar
+              </button>
+
+              <button
+                type="button"
+                data-no-marquee
+                disabled={renameSaving}
+                className="text-xs px-3 py-2 rounded-xl border border-border bg-black/30 text-gray-200 hover:border-red-400/60 disabled:opacity-50"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cancelRename();
+                }}
+                title="Cancelar"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="mt-1 flex gap-2 flex-wrap">
           {(asset.tags ?? []).slice(0, 3).map((t) => (
             <span key={t} className="text-xs px-2 py-0.5 rounded bg-black/40 border border-border text-gray-300">
