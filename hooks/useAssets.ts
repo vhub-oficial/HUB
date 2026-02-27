@@ -138,6 +138,15 @@ export function useAssets(args?: AssetsArgs) {
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<Cursor>(null);
+  const requestSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // ✅ stable key to avoid infinite refetch when args object identity changes
   const argsKey = useMemo(() => {
@@ -238,6 +247,7 @@ export function useAssets(args?: AssetsArgs) {
 
   const fetchFirstPage = useCallback(async () => {
     if (!organizationId) return;
+    const reqId = ++requestSeqRef.current;
     setLoading(true);
     setError(null);
 
@@ -247,6 +257,7 @@ export function useAssets(args?: AssetsArgs) {
     try {
       const q0 = buildQuery(a, pageSize + 1); // +1 to detect hasMore
       const { data, error } = await q0;
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       if (error) throw error;
 
       const rows = (data ?? []) as AssetRow[];
@@ -259,11 +270,13 @@ export function useAssets(args?: AssetsArgs) {
       const last = page[page.length - 1];
       setCursor(last?.created_at && last?.id ? { created_at: last.created_at, id: last.id } : null);
     } catch (e: any) {
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       setError(e?.message ?? 'Erro ao carregar assets');
       setAssets([]);
       setHasMore(false);
       setCursor(null);
     } finally {
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       setLoading(false);
     }
   }, [organizationId, args, buildQuery]);
@@ -276,6 +289,8 @@ export function useAssets(args?: AssetsArgs) {
     const c = cursor;
     if (!c) return;
 
+    const reqId = ++requestSeqRef.current;
+
     setLoadingMore(true);
     setError(null);
 
@@ -287,6 +302,7 @@ export function useAssets(args?: AssetsArgs) {
       q = applyCursor(q, c);
 
       const { data, error } = await q;
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       if (error) throw error;
 
       const rows = (data ?? []) as AssetRow[];
@@ -313,8 +329,11 @@ export function useAssets(args?: AssetsArgs) {
         if (!page.length) setHasMore(false);
       }
     } catch (e: any) {
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       setError(e?.message ?? 'Erro ao carregar mais assets');
+      setHasMore(false);
     } finally {
+      if (!mountedRef.current || reqId !== requestSeqRef.current) return;
       setLoadingMore(false);
     }
   }, [organizationId, args, buildQuery, cursor, hasMore, loadingMore]);
@@ -322,7 +341,7 @@ export function useAssets(args?: AssetsArgs) {
   const refresh = useCallback(async () => {
     // refresh resets pagination and fetches first page again
     setCursor(null);
-    setHasMore(false);
+    setHasMore(true);
     await fetchFirstPage();
   }, [fetchFirstPage]);
 
