@@ -253,6 +253,9 @@ export const DashboardPage: React.FC = () => {
   const [bulkTagMode, setBulkTagMode] = React.useState<'add' | 'replace'>('add');
   const [bulkFieldKey, setBulkFieldKey] = React.useState<string>('');
   const [bulkValue, setBulkValue] = React.useState<string>('');
+  // Quick Tags (bulk tags sem modal)
+  const [quickTagsOpen, setQuickTagsOpen] = useState(false);
+  const [quickTagQuery, setQuickTagQuery] = useState('');
   const [bulkBusy, setBulkBusy] = React.useState(false);
   const [bulkActionBusy, setBulkActionBusy] = React.useState(false);
   const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
@@ -444,6 +447,10 @@ export const DashboardPage: React.FC = () => {
 
   const selectedCount = selectedIds.size;
   const actionDisabled = bulkActionBusy || bulkBusy || isBusyMove;
+
+  useEffect(() => {
+    if (!selectedCount) setQuickTagsOpen(false);
+  }, [selectedCount]);
 
   // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
   const hasActiveAssetFilters =
@@ -835,6 +842,32 @@ export const DashboardPage: React.FC = () => {
       setBulkBusy(false);
     }
   }, [bulkFieldKey, bulkMode, bulkTagMode, bulkValue, refresh, scopedAssets, selectedIds, showToast, updateAsset]);
+
+  const applyQuickTag = async (tagRaw: string) => {
+    const tag = String(tagRaw ?? '').trim();
+    if (!tag) return;
+
+    // viewer não pode (evita UX confusa; hook também bloqueia)
+    // se não existir "role" no arquivo, remova este if e deixe o hook bloquear.
+    if (role === 'viewer') return;
+
+    try {
+      setBulkMode('tags');
+      setBulkTagMode('add');
+      setBulkValue(tag);
+      // não abrir modal
+      await applyBulkMeta();
+    } finally {
+      // mantém popover aberto pra aplicar várias tags rápido
+    }
+  };
+
+  const filteredQuickTags = useMemo(() => {
+    const all = (bulkOptions?.tags ?? []) as string[];
+    const q = quickTagQuery.trim().toLowerCase();
+    const list = !q ? all : all.filter((t) => String(t).toLowerCase().includes(q));
+    return list.slice(0, 18); // limite pra UI não ficar enorme
+  }, [bulkOptions, quickTagQuery]);
 
 
   const bulkDeleteSelected = React.useCallback(async () => {
@@ -1369,6 +1402,98 @@ export const DashboardPage: React.FC = () => {
                             >
                               Menu filtros
                             </button>
+
+
+                            <div className="relative" data-keep-selection data-no-marquee>
+                              <button
+                                type="button"
+                                className="px-3 py-2 rounded-xl border border-border bg-black/40 text-white hover:border-gold/40 text-sm"
+                                onClick={() => setQuickTagsOpen((v) => !v)}
+                                disabled={role === 'viewer'}
+                                title={role === 'viewer' ? 'Viewer não pode aplicar tags' : 'Adicionar tags rapidamente'}
+                                data-no-marquee
+                              >
+                                + Tags
+                              </button>
+
+                              {quickTagsOpen && (
+                                <div
+                                  className="absolute bottom-[calc(100%+10px)] left-0 w-[320px] max-w-[80vw] rounded-2xl border border-border bg-black/95 backdrop-blur shadow-2xl p-3 z-[9999]"
+                                  data-no-marquee
+                                  data-keep-selection
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="text-sm font-semibold text-white">Adicionar tags</div>
+                                    <button
+                                      type="button"
+                                      className="px-2 py-1 rounded-lg border border-border bg-black/40 text-gray-200 hover:border-gold/40 text-xs"
+                                      onClick={() => setQuickTagsOpen(false)}
+                                      data-no-marquee
+                                      title="Fechar"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+
+                                  <input
+                                    value={quickTagQuery}
+                                    onChange={(e) => setQuickTagQuery(e.target.value)}
+                                    placeholder="Buscar ou criar tag…"
+                                    className="w-full mb-2 px-3 py-2 rounded-xl border border-border bg-black/40 text-white text-sm outline-none focus:border-gold/50"
+                                    data-no-marquee
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const v = quickTagQuery.trim();
+                                        if (v) applyQuickTag(v);
+                                      } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setQuickTagsOpen(false);
+                                      }
+                                    }}
+                                  />
+
+                                  {/* CTA para adicionar tag digitada */}
+                                  {quickTagQuery.trim() && !((bulkOptions?.tags ?? []) as string[]).some((t) => String(t).toLowerCase() === quickTagQuery.trim().toLowerCase()) && (
+                                    <button
+                                      type="button"
+                                      className="w-full mb-2 px-3 py-2 rounded-xl border border-gold/30 bg-gold/10 text-gold text-sm hover:bg-gold/15"
+                                      onClick={() => applyQuickTag(quickTagQuery)}
+                                      data-no-marquee
+                                    >
+                                      + Adicionar “{quickTagQuery.trim()}”
+                                    </button>
+                                  )}
+
+                                  <div className="flex flex-wrap gap-2">
+                                    {filteredQuickTags.length === 0 ? (
+                                      <div className="text-xs text-gray-400">Nenhuma tag encontrada.</div>
+                                    ) : (
+                                      filteredQuickTags.map((t) => (
+                                        <button
+                                          key={t}
+                                          type="button"
+                                          className="px-2.5 py-1.5 rounded-full border border-border bg-black/40 text-gray-100 text-xs hover:border-gold/40"
+                                          onClick={() => applyQuickTag(t)}
+                                          data-no-marquee
+                                          title="Clique para aplicar em todos selecionados"
+                                        >
+                                          + {t}
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+
+                                  <div className="text-[11px] text-gray-500 mt-2">
+                                    Dica: clique em várias tags para aplicar rápido (sem abrir modal).
+                                  </div>
+                                </div>
+                              )}
+                            </div>
 
                             <button
                               type="button"
