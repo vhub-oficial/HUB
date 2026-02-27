@@ -15,6 +15,11 @@ type Props = {
   onDragStart?: (e: React.DragEvent, assetId: string) => void;
   onItemContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
   onRenameInline?: (assetId: string, nextName: string) => Promise<void> | void;
+
+  renamingId?: string | null;
+  onOpenRename?: (assetId: string) => void;
+  onCloseRename?: () => void;
+  canRenameInline?: boolean;
 };
 
 type MarqueeState = {
@@ -59,6 +64,10 @@ export const AssetGrid: React.FC<Props> = ({
   onDragStart,
   onItemContextMenu,
   onRenameInline,
+  renamingId,
+  onOpenRename,
+  onCloseRename,
+  canRenameInline,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -304,6 +313,10 @@ export const AssetGrid: React.FC<Props> = ({
               onToggleSelect={onToggleSelect}
               onContextMenu={onItemContextMenu}
               onRenameInline={onRenameInline}
+              renamingId={renamingId ?? null}
+              onOpenRename={onOpenRename}
+              onCloseRename={onCloseRename}
+              canRenameInline={!!canRenameInline}
             />
           </div>
         ))}

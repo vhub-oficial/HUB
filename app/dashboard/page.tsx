@@ -52,6 +52,20 @@ export const DashboardPage: React.FC = () => {
   const q = searchParams.get('q') ?? '';
   const isSearching = !type && !!q.trim();
   const { organizationId, role } = useAuth();
+  const [renamingId, setRenamingId] = React.useState<string | null>(null);
+  const canRenameInline = role === 'admin' || role === 'editor';
+
+  const openRenameInline = React.useCallback(
+    (assetId: string) => {
+      if (!canRenameInline) return;
+      setRenamingId(assetId);
+    },
+    [canRenameInline]
+  );
+
+  const closeRenameInline = React.useCallback(() => {
+    setRenamingId(null);
+  }, []);
 
   const isEventInsideSelectionCtxMenu = (ev: MouseEvent) => {
     const path = (ev.composedPath?.() ?? []) as any[];
@@ -303,9 +317,11 @@ export const DashboardPage: React.FC = () => {
 
   const handleRenameInline = React.useCallback(
     async (assetId: string, nextName: string) => {
+      if (!canRenameInline) return;
       await updateAsset(assetId, { name: nextName } as any);
+      setRenamingId(null);
     },
-    [updateAsset]
+    [updateAsset, canRenameInline]
   );
   const {
     folders,
@@ -1306,6 +1322,10 @@ export const DashboardPage: React.FC = () => {
                       onItemContextMenu={openSelectionContextMenu}
                       density={gridDensity}
                       onRenameInline={handleRenameInline}
+                      renamingId={renamingId}
+                      onOpenRename={openRenameInline}
+                      onCloseRename={closeRenameInline}
+                      canRenameInline={canRenameInline}
                     />
                     {type && selectedCount > 0 && (
                       <div

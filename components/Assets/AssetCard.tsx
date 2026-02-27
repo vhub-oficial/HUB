@@ -18,6 +18,11 @@ type Props = {
   onToggleSelect?: (assetId: string, ev: { shift: boolean; meta: boolean; ctrl: boolean }) => void;
   onContextMenu?: (e: React.MouseEvent, assetId?: string) => void;
   onRenameInline?: (assetId: string, nextName: string) => Promise<void> | void;
+
+  renamingId: string | null;
+  onOpenRename?: (assetId: string) => void;
+  onCloseRename?: () => void;
+  canRenameInline: boolean;
 };
 
 type VhubAudioSingleton = {
@@ -103,6 +108,10 @@ export const AssetCard: React.FC<Props> = ({
   onToggleSelect,
   onContextMenu,
   onRenameInline,
+  renamingId,
+  onOpenRename,
+  onCloseRename,
+  canRenameInline,
 }) => {
   const navigate = useNavigate();
   const { organizationId, role } = useAuth();
@@ -113,7 +122,7 @@ export const AssetCard: React.FC<Props> = ({
   const external = React.useMemo(() => isExternal(asset), [asset.id]);
   const audioCapable = React.useMemo(() => isAudio(asset), [asset]);
   const assetIdRef = React.useRef<string>(asset.id);
-  const [renaming, setRenaming] = React.useState(false);
+  const renaming = renamingId === asset.id;
   const [draftName, setDraftName] = React.useState(asset.name ?? '');
   const [renameSaving, setRenameSaving] = React.useState(false);
 
@@ -318,30 +327,27 @@ export const AssetCard: React.FC<Props> = ({
 
   const cancelRename = React.useCallback(() => {
     setDraftName(asset.name ?? '');
-    setRenaming(false);
     setRenameSaving(false);
-  }, [asset.name]);
+    onCloseRename?.();
+  }, [asset.name, onCloseRename]);
 
   const commitRename = React.useCallback(async () => {
-    if (!onRenameInline) {
-      setRenaming(false);
-      return;
-    }
+    if (!canRenameInline) return;
+    if (!onRenameInline) return;
 
     const clean = String(draftName ?? '').trim();
     if (!clean || clean === (asset.name ?? '').trim()) {
-      setRenaming(false);
+      onCloseRename?.();
       return;
     }
 
     try {
       setRenameSaving(true);
       await onRenameInline(asset.id, clean);
-      setRenaming(false);
     } finally {
       setRenameSaving(false);
     }
-  }, [onRenameInline, draftName, asset.id, asset.name]);
+  }, [canRenameInline, onRenameInline, draftName, asset.id, asset.name, onCloseRename]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     const meta = e.metaKey;
@@ -360,6 +366,10 @@ export const AssetCard: React.FC<Props> = ({
     e.stopPropagation();
     navigate(`/assets/${asset.id}`);
   };
+
+  if (renaming && !canRenameInline) {
+    onCloseRename?.();
+  }
 
   return (
     <button
@@ -617,30 +627,13 @@ export const AssetCard: React.FC<Props> = ({
           onDoubleClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setRenaming(true);
-            setDraftName(asset.name ?? '');
+            if (!canRenameInline) return;
+            onOpenRename?.(asset.id);
           }}
         >
           {!renaming ? (
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-white truncate" title={asset.name}>
-                {asset.name}
-              </div>
-
-              <button
-                type="button"
-                data-no-marquee
-                className="ml-auto text-xs px-2 py-1 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setRenaming(true);
-                  setDraftName(asset.name ?? '');
-                }}
-                title="Renomear"
-              >
-                ✎
-              </button>
+            <div className="text-sm text-white truncate" title={asset.name}>
+              {asset.name}
             </div>
           ) : (
             <div className="flex items-center gap-2">
