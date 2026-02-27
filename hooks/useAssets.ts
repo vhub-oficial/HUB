@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrgBucketName } from '../lib/storageHelpers';
+import { storageUploadWithProgress } from '../lib/storageUploadWithProgress';
 
 let disableActivityLogs = false;
 
@@ -328,7 +329,8 @@ export function useAssets(args?: AssetsArgs) {
   const uploadAsset = useCallback(
     async (
       file: File,
-      opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any; displayName: string }
+      opts: { folderId?: string | null; tags: string[]; categoryType: string; meta?: any; displayName: string },
+      extra?: { onProgress?: (pct: number) => void; signal?: AbortSignal }
     ) => {
       if (!organizationId) throw new Error('organizationId ausente');
       if (!user?.id) throw new Error('não autenticado');
@@ -342,12 +344,22 @@ export function useAssets(args?: AssetsArgs) {
       const folderPath = opts.folderId ? `folders/${opts.folderId}` : 'root';
       const objectPath = `${folderPath}/${filename}`;
 
-      const { error: upErr } = await supabase.storage.from(bucket).upload(objectPath, file, {
+      // ✅ Upload real com progresso (0–90% fica na UI; o resto é insert/usage/thumbnail)
+      await storageUploadWithProgress({
+        bucket,
+        objectPath,
+        file,
         upsert: false,
-        contentType: file.type || undefined,
-        cacheControl: '31536000',
+        signal: extra?.signal,
+        onProgress: (pct) => {
+          // mapeia 0..100 -> 0..90 (deixa margem para insert/usage/thumbnail)
+          const uiPct = Math.min(90, Math.max(0, Math.round(pct * 0.9)));
+          extra?.onProgress?.(uiPct);
+        },
       });
-      if (upErr) throw upErr;
+
+      // pequeno “checkpoint” pra evitar sensação de travamento ao sair do upload
+      extra?.onProgress?.(Math.max(extra?.onProgress ? 90 : 90, Math.min(92, 90)));
 
       let thumb: { path: string; mime: string } | null = null;
 
@@ -407,6 +419,8 @@ export function useAssets(args?: AssetsArgs) {
         .single();
       if (insErr) throw insErr;
 
+      extra?.onProgress?.(95);
+
       // storage usage (best-effort but still deterministic enough for now)
       const deltaGb = sizeMb / 1024;
       const { data: usage, error: uErr } = await supabase
@@ -439,6 +453,8 @@ export function useAssets(args?: AssetsArgs) {
       } catch {
         disableActivityLogs = true;
       }
+
+      extra?.onProgress?.(100);
 
       return (inserted?.id ?? assetId) as string;
     },

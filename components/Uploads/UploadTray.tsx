@@ -19,6 +19,7 @@ export function UploadTray() {
   const done = items.filter((x) => x.status === 'done').length;
   const uploading = items.filter((x) => x.status === 'uploading').length;
   const queued = items.filter((x) => x.status === 'queued').length;
+  const hasRetryable = items.some((x) => x.status === 'error' || x.status === 'canceled');
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999] w-[380px] max-w-[92vw]">
@@ -29,14 +30,16 @@ export function UploadTray() {
             <span className="text-gray-400 font-normal"> {uploading ? `• ${uploading} enviando` : ''}{queued ? `• ${queued} na fila` : ''}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs px-3 py-1.5 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
-              onClick={retryAll}
-              title="Tentar novamente (erros e cancelados)"
-            >
-              Tentar novamente
-            </button>
+            {hasRetryable && (
+              <button
+                type="button"
+                className="text-xs px-3 py-1.5 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"
+                onClick={retryAll}
+                title="Tentar novamente (erros e cancelados)"
+              >
+                Tentar novamente
+              </button>
+            )}
             <button
               type="button"
               className="text-xs px-3 py-1.5 rounded-lg border border-border bg-black/30 text-gray-200 hover:border-gold/40"

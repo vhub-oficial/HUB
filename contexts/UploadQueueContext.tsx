@@ -60,6 +60,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const seenRef = useRef<Record<string, number>>({});
 
   const cancelRef = useRef<Record<string, boolean>>({});
+  const abortRef = React.useRef<Record<string, AbortController | undefined>>({});
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -110,12 +111,25 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
 
   const cancelItem = useCallback((id: string) => {
     cancelRef.current[id] = true;
-    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'canceled', error: 'Cancelado' } : x)));
+
+    // ✅ cancela de verdade o request atual
+    try {
+      abortRef.current[id]?.abort();
+    } catch {}
+
+    setItems((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, status: 'canceled', progress: 0, error: 'Cancelado' } : x))
+    );
   }, []);
 
   const cancelAll = useCallback(() => {
     const snapshot = itemsRef.current;
-    for (const it of snapshot) cancelRef.current[it.id] = true;
+    for (const it of snapshot) {
+      cancelRef.current[it.id] = true;
+      try {
+        abortRef.current[it.id]?.abort();
+      } catch {}
+    }
 
     setItems((prev) =>
       prev.map((x) => (x.status === 'done' ? x : { ...x, status: 'canceled', progress: 0, error: 'Cancelado' }))
@@ -187,22 +201,35 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
             continue;
           }
 
-          // mark uploading BEFORE calling uploadAsset (prevents double-pick)
+          // cria controller por item
+          abortRef.current[next.id] = new AbortController();
+
           setItems((prev) =>
-            prev.map((x) => (x.id === next.id ? { ...x, status: 'uploading', progress: 10, error: null } : x))
+            prev.map((x) => (x.id === next.id ? { ...x, status: 'uploading', progress: 0, error: null } : x))
           );
 
           try {
             // IMPORTANT:
             // Para upload “drive-like” sem modal, usamos tag default "inbox"
             // e meta.needs_review=true para o usuário organizar depois.
-            await uploadAsset(next.file, {
-              folderId: next.folderId,
-              tags: ['inbox'],
-              categoryType: next.categoryType,
-              displayName: next.file.name,
-              meta: { source: 'storage', needs_review: true, inbox: true },
-            });
+            await uploadAsset(
+              next.file,
+              {
+                folderId: next.folderId,
+                tags: ['inbox'],
+                categoryType: next.categoryType,
+                displayName: next.file.name,
+                meta: { source: 'storage', needs_review: true, inbox: true },
+              },
+              {
+                signal: abortRef.current[next.id]?.signal,
+                onProgress: (pct) => {
+                  setItems((prev) =>
+                    prev.map((x) => (x.id === next.id ? { ...x, progress: pct } : x))
+                  );
+                },
+              }
+            );
 
             // if canceled during upload, don't mark done
             if (cancelRef.current[next.id]) {
@@ -216,11 +243,22 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
               window.dispatchEvent(new Event('vah:assets_changed'));
             }
           } catch (e: any) {
-            setItems((prev) =>
-              prev.map((x) =>
-                x.id === next.id ? { ...x, status: 'error', progress: 0, error: e?.message ?? 'Falha no upload' } : x
-              )
-            );
+            const msg = e?.message ?? 'Falha no upload';
+
+            // se abortou, marca cancelado (não erro)
+            if (msg.toLowerCase().includes('cancelado') || msg.toLowerCase().includes('abort')) {
+              setItems((prev) =>
+                prev.map((x) => (x.id === next.id ? { ...x, status: 'canceled', progress: 0, error: 'Cancelado' } : x))
+              );
+            } else {
+              setItems((prev) =>
+                prev.map((x) =>
+                  x.id === next.id ? { ...x, status: 'error', progress: 0, error: msg } : x
+                )
+              );
+            }
+          } finally {
+            delete abortRef.current[next.id];
           }
 
           await new Promise((r) => setTimeout(r, 0));
