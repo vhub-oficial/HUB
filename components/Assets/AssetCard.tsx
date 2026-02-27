@@ -123,6 +123,7 @@ export const AssetCard: React.FC<Props> = ({
   const audioCapable = React.useMemo(() => isAudio(asset), [asset]);
   const assetIdRef = React.useRef<string>(asset.id);
   const renaming = renamingId === asset.id;
+  const isRenaming = renaming;
   const [draftName, setDraftName] = React.useState(asset.name ?? '');
   const [renameSaving, setRenameSaving] = React.useState(false);
 
@@ -374,8 +375,14 @@ export const AssetCard: React.FC<Props> = ({
   return (
     <button
       data-asset-card
-      draggable
+      draggable={!isRenaming}
       onDragStart={(e) => {
+        if (isRenaming) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
         const ids =
           selectedIds && selectedIds.length > 0
             ? (selectedIds.includes(asset.id) ? selectedIds : [asset.id])
@@ -642,6 +649,16 @@ export const AssetCard: React.FC<Props> = ({
                 value={draftName}
                 disabled={renameSaving}
                 onChange={(e) => setDraftName(e.target.value)}
+                data-no-marquee
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onKeyDown={(e) => {
                   e.stopPropagation();
                   if (e.key === 'Enter') {
