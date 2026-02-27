@@ -1301,15 +1301,15 @@ export const DashboardPage: React.FC = () => {
                      setSelectedIds(new Set());
                      setAnchorIndex(null);
                    }}
-                   onDragOver={(e) => {
-                     if (!activeFolderId) return;
-                     e.preventDefault();
-                     e.dataTransfer.dropEffect = 'move';
-                   }}
-                   onDrop={async (e) => {
-                     if (!activeFolderId) return;
-                     await handleDropOnFolder(null, e);
-                   }}
+                  onDragOver={(e) => {
+                    // ✅ NÃO aceitar drop no vazio do grid para mover assets.
+                    // O usuário deve soltar em uma pasta (cards) ou na breadcrumb (raiz/pastas).
+                    return;
+                  }}
+                  onDrop={(e) => {
+                    // ✅ Ignorar: não mover para raiz ao soltar no grid por acidente.
+                    return;
+                  }}
                  >
                     <AssetGrid
                       assets={assetsOverview}
