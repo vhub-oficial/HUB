@@ -300,6 +300,13 @@ export const DashboardPage: React.FC = () => {
     moveAssetToFolder,
     deleteAsset,
   } = useAssets(assetsArgs);
+
+  const handleRenameInline = React.useCallback(
+    async (assetId: string, nextName: string) => {
+      await updateAsset(assetId, { name: nextName } as any);
+    },
+    [updateAsset]
+  );
   const {
     folders,
     createFolder,
@@ -1298,6 +1305,7 @@ export const DashboardPage: React.FC = () => {
                       onDragStart={onDragStartAsset}
                       onItemContextMenu={openSelectionContextMenu}
                       density={gridDensity}
+                      onRenameInline={handleRenameInline}
                     />
                     {type && selectedCount > 0 && (
                       <div
