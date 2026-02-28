@@ -451,7 +451,11 @@ export const DashboardPage: React.FC = () => {
   }, [selectedCount]);
 
   useEffect(() => {
-    if (!selectedCount) setQuickSelectedTags([]);
+    if (!selectedCount) {
+      setQuickTagPicked(new Set());
+      setQuickTagsOpen(false);
+      setQuickTagQuery('');
+    }
   }, [selectedCount]);
 
   // ✅ Mostrar filtros de assets só quando fizer sentido (evita confusão com pastas)
