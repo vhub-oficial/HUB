@@ -223,9 +223,12 @@ export const DashboardPage: React.FC = () => {
     if (activeFolderId) return activeFolderId;
     return null;
   }, [activeFolderId]);
-  const { options } = useFilterOptions(type, effectiveFolderId);
+  const [filterOptionsKey, setFilterOptionsKey] = useState(0);
+  const bumpFilterOptions = () => setFilterOptionsKey((v) => v + 1);
+
+  const { options } = useFilterOptions(type, effectiveFolderId, filterOptionsKey);
   // ✅ opções para BULK: categoria inteira (ignora pasta)
-  const { loading: bulkOptionsLoading, options: bulkOptions } = useFilterOptions(type, undefined);
+  const { loading: bulkOptionsLoading, options: bulkOptions } = useFilterOptions(type, undefined, filterOptionsKey);
   // Usaremos o mesmo seletor para ordenar também os assets.
   const [foldersSort, setFoldersSort] = useState<'recent' | 'az' | 'za'>('recent');
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
@@ -254,7 +257,8 @@ export const DashboardPage: React.FC = () => {
   // Quick Tags (bulk tags sem modal)
   const [quickTagsOpen, setQuickTagsOpen] = useState(false);
   const [quickTagQuery, setQuickTagQuery] = useState('');
-  const [quickSelectedTags, setQuickSelectedTags] = useState<string[]>([]);
+  const [quickTagsList, setQuickTagsList] = useState<string[]>([]);
+  const [quickTagPicked, setQuickTagPicked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = React.useState(false);
   const [bulkActionBusy, setBulkActionBusy] = React.useState(false);
   const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
@@ -826,17 +830,43 @@ export const DashboardPage: React.FC = () => {
     }
   }, [bulkFieldKey, bulkValue, refresh, scopedAssets, selectedIds, showToast, updateAsset]);
 
+  const normalizeTag = (t: string) => t.trim().toLowerCase();
+
+  useEffect(() => {
+    setQuickTagsList((prev) => {
+      const merged = new Set([...(prev ?? []), ...(bulkOptions?.tags ?? [])]);
+      return Array.from(merged).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    });
+  }, [bulkOptions?.tags]);
+
   const toggleQuickTag = (t: string) => {
-    setQuickSelectedTags((prev) => {
-      const has = prev.includes(t);
-      if (has) return prev.filter((x) => x !== t);
-      return [...prev, t];
+    setQuickTagPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  };
+
+  const createQuickTag = (raw: string) => {
+    const t = normalizeTag(raw);
+    if (!t) return;
+
+    setQuickTagsList((prev) => {
+      const merged = new Set([...(prev ?? []), t]);
+      return Array.from(merged).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    });
+
+    setQuickTagPicked((prev) => {
+      const next = new Set(prev);
+      next.add(t);
+      return next;
     });
   };
 
   const applyQuickTagsBatch = async (mode: 'add' | 'remove') => {
     if (role === 'viewer') return;
-    const tags = quickSelectedTags.map((x) => String(x).trim()).filter(Boolean);
+    const tags = Array.from(quickTagPicked).map((x) => String(x).trim()).filter(Boolean);
     if (!tags.length) return;
 
     setBulkBusy(true);
@@ -872,15 +902,16 @@ export const DashboardPage: React.FC = () => {
       console.error(e);
     } finally {
       setBulkBusy(false);
+      bumpFilterOptions();
     }
   };
 
   const filteredQuickTags = useMemo(() => {
-    const all = (bulkOptions?.tags ?? []) as string[];
+    const all = (quickTagsList ?? []) as string[];
     const q = quickTagQuery.trim().toLowerCase();
     const list = !q ? all : all.filter((t) => String(t).toLowerCase().includes(q));
     return list.slice(0, 18); // limite pra UI não ficar enorme
-  }, [bulkOptions, quickTagQuery]);
+  }, [quickTagsList, quickTagQuery]);
 
 
   const bulkDeleteSelected = React.useCallback(async () => {
@@ -1459,7 +1490,7 @@ export const DashboardPage: React.FC = () => {
                                         e.preventDefault();
                                         e.stopPropagation();
                                         const v = quickTagQuery.trim();
-                                        if (v) toggleQuickTag(v);
+                                        if (v) createQuickTag(v);
                                       } else if (e.key === 'Escape') {
                                         e.preventDefault();
                                         e.stopPropagation();
@@ -1469,14 +1500,14 @@ export const DashboardPage: React.FC = () => {
                                   />
 
                                   {/* CTA para adicionar tag digitada */}
-                                  {quickTagQuery.trim() && !((bulkOptions?.tags ?? []) as string[]).some((t) => String(t).toLowerCase() === quickTagQuery.trim().toLowerCase()) && (
+                                  {quickTagQuery.trim() && !(quickTagsList ?? []).some((t) => String(t).toLowerCase() === quickTagQuery.trim().toLowerCase()) && (
                                     <button
                                       type="button"
                                       className="w-full mb-2 px-3 py-2 rounded-xl border border-gold/30 bg-gold/10 text-gold text-sm hover:bg-gold/15"
                                       onClick={() => {
                                         const v = quickTagQuery.trim();
                                         if (!v) return;
-                                        toggleQuickTag(v);
+                                        createQuickTag(v);
                                       }}
                                       data-no-marquee
                                     >
@@ -1488,28 +1519,28 @@ export const DashboardPage: React.FC = () => {
                                     <button
                                       type="button"
                                       className="flex-1 px-3 py-2 rounded-xl border border-gold/30 bg-gold/10 text-gold text-sm hover:bg-gold/15 disabled:opacity-50"
-                                      disabled={role === 'viewer' || quickSelectedTags.length === 0}
+                                      disabled={role === 'viewer' || quickTagPicked.size === 0}
                                       onClick={() => applyQuickTagsBatch('add')}
                                       data-no-marquee
                                     >
-                                      Aplicar ({quickSelectedTags.length})
+                                      Aplicar ({quickTagPicked.size})
                                     </button>
 
                                     <button
                                       type="button"
                                       className="flex-1 px-3 py-2 rounded-xl border border-red-400/30 bg-red-500/10 text-red-200 text-sm hover:bg-red-500/15 disabled:opacity-50"
-                                      disabled={role === 'viewer' || quickSelectedTags.length === 0}
+                                      disabled={role === 'viewer' || quickTagPicked.size === 0}
                                       onClick={() => applyQuickTagsBatch('remove')}
                                       data-no-marquee
                                     >
-                                      Remover ({quickSelectedTags.length})
+                                      Remover ({quickTagPicked.size})
                                     </button>
 
                                     <button
                                       type="button"
                                       className="px-3 py-2 rounded-xl border border-border bg-black/40 text-gray-200 text-sm hover:border-gold/40 disabled:opacity-50"
-                                      disabled={quickSelectedTags.length === 0}
-                                      onClick={() => setQuickSelectedTags([])}
+                                      disabled={quickTagPicked.size === 0}
+                                      onClick={() => setQuickTagPicked(new Set())}
                                       data-no-marquee
                                       title="Limpar seleção"
                                     >
@@ -1526,7 +1557,7 @@ export const DashboardPage: React.FC = () => {
                                           key={t}
                                           type="button"
                                           className={`px-2.5 py-1.5 rounded-full border text-xs ${
-                                            quickSelectedTags.includes(t)
+                                            quickTagPicked.has(t)
                                               ? 'border-gold/60 bg-gold/15 text-gold'
                                               : 'border-border bg-black/40 text-gray-100 hover:border-gold/40'
                                           }`}
@@ -1534,7 +1565,7 @@ export const DashboardPage: React.FC = () => {
                                           data-no-marquee
                                           title="Clique para selecionar"
                                         >
-                                          {quickSelectedTags.includes(t) ? '✓ ' : '+ '}
+                                          {quickTagPicked.has(t) ? '✓ ' : '+ '}
                                           {t}
                                         </button>
                                       ))

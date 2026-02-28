@@ -8,12 +8,12 @@ type Options = {
   meta: Record<string, string[]>;
 };
 
-export function useFilterOptions(type?: string | null, folderId?: string | null) {
+export function useFilterOptions(type?: string | null, folderId?: string | null, refreshKey?: number) {
   const { organizationId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Options>({ tags: [], meta: {} });
 
-  const folderKey = folderId === undefined ? 'U' : folderId === null ? 'N' : folderId;
+  const metaFields = useMemo(() => getCategoryMetaFields(type).map((f) => f.key), [type]);
 
   useEffect(() => {
     let mounted = true;
@@ -47,15 +47,14 @@ export function useFilterOptions(type?: string | null, folderId?: string | null)
 
         const tagSet = new Set<string>();
         const metaSets: Record<string, Set<string>> = {};
-        const metaKeys = type ? getCategoryMetaFields(type).map((f) => f.key) : [];
-        metaKeys.forEach((k) => (metaSets[k] = new Set<string>()));
+        metaFields.forEach((k) => (metaSets[k] = new Set<string>()));
 
         (data ?? []).forEach((row: any) => {
           const tags: string[] = row?.tags ?? [];
           tags.forEach((t) => tagSet.add(t));
 
           const meta = row?.meta ?? {};
-          metaKeys.forEach((k) => {
+          metaFields.forEach((k) => {
             const v = meta?.[k];
             if (v === undefined || v === null) return;
             const s = String(v).trim();
@@ -65,13 +64,13 @@ export function useFilterOptions(type?: string | null, folderId?: string | null)
         });
 
         const nextMeta: Record<string, string[]> = {};
-        metaKeys.forEach((k) => {
-          nextMeta[k] = Array.from(metaSets[k]).sort((a, b) => a.localeCompare(b));
+        metaFields.forEach((k) => {
+          nextMeta[k] = Array.from(metaSets[k]).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         });
 
         if (!mounted) return;
         setOptions({
-          tags: Array.from(tagSet).sort((a, b) => a.localeCompare(b)),
+          tags: Array.from(tagSet).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
           meta: nextMeta,
         });
       } catch {
@@ -84,7 +83,7 @@ export function useFilterOptions(type?: string | null, folderId?: string | null)
     return () => {
       mounted = false;
     };
-  }, [organizationId, type, folderKey]);
+  }, [organizationId, type, folderId, metaFields, refreshKey]);
 
   return useMemo(() => ({ loading, options }), [loading, options]);
 }
